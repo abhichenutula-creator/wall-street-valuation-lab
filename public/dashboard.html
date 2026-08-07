@@ -298,6 +298,7 @@
 
   window.addEventListener('message', function(event){
     var msg = event.data;
+    console.log('[wsvl] dashboard received message from', event.origin, JSON.stringify(msg).slice(0,200));
     if (!msg || msg.source !== 'wsvl') return;
     if (msg.type === 'wsvl:response' && pending[msg.requestId]) {
       pending[msg.requestId].resolve(msg.payload);
@@ -313,11 +314,13 @@
       var requestId = 'r' + (++reqCounter);
       pending[requestId] = { resolve: resolve, reject: reject };
       var envelope = { source: 'wsvl', type: 'wsvl:request', requestId: requestId, payload: payload };
+      console.log('[wsvl] sending request', requestId, 'window.parent===window.top?', window.parent === window.top);
       try {
         window.parent.postMessage(envelope, '*');
-      } catch (e) { reject(e); }
+        window.top.postMessage(envelope, '*');
+      } catch (e) { console.log('[wsvl] postMessage threw', e.message); reject(e); }
       setTimeout(function(){
-        if (pending[requestId]) { pending[requestId].reject(new Error('timeout')); delete pending[requestId]; }
+        if (pending[requestId]) { console.log('[wsvl] request timed out', requestId); pending[requestId].reject(new Error('timeout')); delete pending[requestId]; }
       }, 8000);
     });
   }
