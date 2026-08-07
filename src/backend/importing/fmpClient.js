@@ -14,9 +14,15 @@ const elevatedGetSecretValue = elevate(secrets.getSecretValue);
 const FMP_BASE_URL = 'https://financialmodelingprep.com/stable';
 
 async function getApiKey() {
-  const value = await elevatedGetSecretValue('FMP_API_KEY');
-  if (!value) {
-    throw new Error('FMP_API_KEY secret is empty or not found in Secrets Manager');
+  const raw = await elevatedGetSecretValue('FMP_API_KEY');
+  // Docs for wix-secrets-backend.v2 say this resolves to a plain string, but
+  // live testing showed it actually resolves to { value: "..." } — passing
+  // that object straight into URLSearchParams silently stringified it to
+  // "[object Object]", which is why FMP returned "Invalid API KEY" on every
+  // request. Unwrap both shapes defensively.
+  const value = raw && typeof raw === 'object' && typeof raw.value === 'string' ? raw.value : raw;
+  if (!value || typeof value !== 'string') {
+    throw new Error('FMP_API_KEY secret is empty, not found, or in an unexpected format');
   }
   return value;
 }
