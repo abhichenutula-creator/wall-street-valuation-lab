@@ -1,9 +1,20 @@
-import { secrets } from '@wix/secrets';
+import { secrets } from 'wix-secrets-backend.v2';
+import { elevate } from 'wix-auth';
+import { fetch } from 'wix-fetch';
+
+// secrets.getSecretValue requires SECRETS_VAULT.SECRET_READ, which our own
+// Permissions.Anyone web method doesn't have by default — elevate() runs it
+// with the site owner's permission instead. Confirmed against Wix's current
+// (non-deprecated) Secrets API docs, not the older `wix-secrets-backend`
+// getSecret(), which is deprecated, and not `@wix/secrets`, which isn't
+// available as a built-in module on classic Velo sites (caused a real
+// "Cannot find module" bug during Phase 4 live testing — fixed here).
+const elevatedGetSecretValue = elevate(secrets.getSecretValue);
 
 const FMP_BASE_URL = 'https://financialmodelingprep.com/stable';
 
 async function getApiKey() {
-  const { value } = await secrets.getSecretValue({ name: 'FMP_API_KEY' });
+  const value = await elevatedGetSecretValue('FMP_API_KEY');
   if (!value) {
     throw new Error('FMP_API_KEY secret is empty or not found in Secrets Manager');
   }
