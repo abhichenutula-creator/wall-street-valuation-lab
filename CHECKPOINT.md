@@ -2,7 +2,11 @@
 
 **Phase 1 (core valuation engine) is complete.** All 12 plan tasks implemented, 72/72 tests passing, UI verified in a real browser. See the final report in conversation history for the full bug list. This file is kept for historical reference; `docs/superpowers/plans/2026-08-07-phase1-core-valuation-engine.md` is the task-by-task record.
 
-**Phase 2 (Wix Velo port) is in progress, blocked on the user.** Backend engine ported unchanged to `wix-site/backend/` (verified byte-identical via `diff -r` against `src/engine/`), plus a `@wix/web-methods` wrapper (`wix-site/backend/valuationApi.web.js`), confirmed against Wix's SDK docs, not guessed. **Blocked**: user is connecting Git Integration/Dev Mode on the live Wix Studio site themselves (requires their own GitHub OAuth, which I can't do). Next step once they confirm it's connected: place `backend/` in the real repo, build the Valuation Lab page in the Editor (element placement — the least automatable part), then wire page code to the web methods and verify numerically against `test/engine/integration.test.js`'s Base Case. See `wix-site/README.md` for the detailed handoff.
+**Phase 2 (Wix Velo port): Git Integration connected and reconciled.** GitHub repo `abhichenutula-creator/wall-street-valuation-lab` is now `origin` for this local repo. Wix's auto-generated initial commit (`.eslintrc.json`, `.gitignore`, `README.md`, `package.json`, `src/backend|pages|public/`, `wix.config.json`, `wix.lock`) was merged with `--allow-unrelated-histories`; only conflict was `package.json` (hand-merged: kept Wix's `devDependencies`/`dev`/`lint`/`postinstall` scripts, added back `name`/`private`/`type:module`/`test` script — Wix's own tooling doesn't read `type`, confirmed no risk). Pushed to `origin/main` (`71f0bda`) — verified present on GitHub via `gh api`. All 72 local tests still pass post-merge.
+
+Velo backend port relocated from the old `wix-site/backend/` scratch path to the real `src/backend/valuation/*.js` (byte-identical to `src/engine/*.js`) + `src/backend/valuationApi.web.js` (`@wix/web-methods` wrappers), matching Wix's actual Git-Integration layout.
+
+**Next**: confirm the Wix Editor's Local Editor/Dev Mode picked up the push, then build the actual Valuation Lab page (inputs, button, results tables) in the Editor and wire page code to `runWaccCalculation`/`runScenarioValuation`/`runReverseDcf`/`runSensitivityTable`, then browser-test against `test/engine/integration.test.js`'s Base Case.
 
 ## Current Setup
 
