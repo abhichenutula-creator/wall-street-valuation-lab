@@ -1,6 +1,6 @@
 // API Reference: https://www.wix.com/velo/reference/api-overview/introduction
 import { runWaccCalculation, runScenarioValuation, runReverseDcf, runSensitivityTable } from 'backend/valuationApi.web';
-import { importCompanyData, debugFetchProfile, debugFetchIncome } from 'backend/companyImport.web';
+import { importCompanyData, debugSecretMetaCheck } from 'backend/companyImport.web';
 
 // Bridges the embedded dashboard (public/dashboard.html, hosted on GitHub Pages
 // inside an HTML Component) to the verified Velo backend via postMessage/onMessage.
@@ -56,10 +56,11 @@ async function computeAll(payload) {
 }
 
 $w.onReady(function () {
-  // TEMPORARY debug calls for isolating the 401 — test Profile then Income
-  // Statement separately, per the requested diagnosis sequence.
-  debugFetchProfile('MSFT').then((r) => console.log('[wsvl:debug] PROFILE', JSON.stringify(r).slice(0, 500)));
-  debugFetchIncome('MSFT').then((r) => console.log('[wsvl:debug] INCOME', JSON.stringify(r).slice(0, 500)));
+  // TEMPORARY debug calls for isolating the 401 — both Profile and Income
+  // came back "Invalid API KEY" directly from FMP, so now checking whether
+  // the stored secret itself is corrupted (whitespace/format), without ever
+  // logging the actual value.
+  debugSecretMetaCheck().then((r) => console.log('[wsvl:debug] SECRET_META', JSON.stringify(r).slice(0, 500)));
 
   const dashboard = $w('#htmlDashboard');
 

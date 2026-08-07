@@ -1,5 +1,5 @@
 import { webMethod, Permissions } from '@wix/web-methods';
-import { fetchCompanyProfile, fetchIncomeStatements, fetchBalanceSheets, fetchCashFlows } from './importing/fmpClient.js';
+import { fetchCompanyProfile, fetchIncomeStatements, fetchBalanceSheets, fetchCashFlows, debugSecretMeta } from './importing/fmpClient.js';
 import { normalizeProfile, normalizeIncomeStatements, normalizeBalanceSheets, normalizeCashFlows, deriveEngineInputs } from './importing/normalizeFmp.js';
 
 // FMP account: PRIVATE DEVELOPMENT/TESTING ONLY (see Terms of Service —
@@ -49,4 +49,8 @@ export const debugFetchIncome = webMethod(Permissions.Anyone, async (ticker) => 
   } catch (err) {
     return { ok: false, error: err.message };
   }
+});
+
+export const debugSecretMetaCheck = webMethod(Permissions.Anyone, async () => {
+  return debugSecretMeta();
 });
