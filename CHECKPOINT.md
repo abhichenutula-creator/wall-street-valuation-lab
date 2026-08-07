@@ -10,7 +10,15 @@ Velo backend port relocated from the old `wix-site/backend/` scratch path to the
 
 Scope note: this is a compact proof (1 button, 1 output block) rather than the full 18-field manual-input form — deliberate, to avoid dozens of fragile drag-and-drop element placements. Full manual-input parity with `public/index.html` is the next increment if wanted.
 
-**Next**: (optional) build out full manual-input fields on the native page to match `public/index.html`, or decide the HTML-embed route is sufficient for the manual-input UI while native Velo stays as the verified backend layer.
+**Phase 3 (full Valuation Lab dashboard UI): built and verified working.** Built a dense, Koyfin/TIKR-style dashboard (`public/dashboard.html`, ~700 lines, dark terminal theme, monospace tabular numerals, sidebar nav across all 8 required sections: Overview, Company, Forecast, DCF, Market Expectations, Scenarios, Sensitivity, Summary). Ticker/company area uses clearly-labeled sample data (`Acme Robotics, Inc.` / `ACME`) with ticker search visibly disabled ("not yet connected" badge) per spec.
+
+Architecture: rather than hand-placing ~80-100 native `$w()` elements (confirmed infeasible at reasonable token cost — Phase 2's 2-element proof alone took ~15 browser steps), the dashboard is a single self-contained HTML/CSS/JS file hosted on **GitHub Pages** (repo made public with user's explicit approval, since GitHub Pages requires either a public repo or a paid plan) and embedded via **one** Wix `$w.HtmlComponent` (`#htmlDashboard`, "Website address" mode pointing at `https://abhichenutula-creator.github.io/wall-street-valuation-lab/public/dashboard.html`). It talks to the real Velo backend via the documented `postMessage`/`onMessage` bridge (`$w('#htmlDashboard').onMessage()` / `.postMessage()`), not a duplicate/reimplemented engine — `src/pages/Home.c1dmp.js` receives requests and calls the same `runWaccCalculation`/`runScenarioValuation`/`runReverseDcf`/`runSensitivityTable` web methods proven in Phase 2.
+
+**Verified in real Wix Preview**: engine bridge went live (no errors), and output matched the independently-computed expected values exactly across every section checked — Overview cards (WACC 8.96%, EV $2,829.9, Equity $2,729.9, Implied Price $27.30), Bear/Base/Bull scenario cards ($8.70 / $27.30 / $96.29), and the full WACC×terminal-growth sensitivity table (5×5, correct values, correct base-cell highlighting). Old Phase 2 proof-of-concept elements (`#btnRunValuation`, `#txtResults`) were removed from the canvas.
+
+One debug-and-fix cycle: the first postMessage attempt (`window.parent` only) timed out in the Editor's Preview harness; adding a `window.top` fallback (kept, since Preview's frame nesting can differ from a published site) resolved it. Debug `console.log` statements were added to isolate this, then removed after confirming the fix; the `window.top` fallback itself was kept as a legitimate robustness measure. Site remains **unpublished** per instructions.
+
+**Next**: (optional) full manual-input parity for every field shown in the spec (current dashboard already has editable inputs for the core assumptions — revenue growth, EBIT margin, tax rate, D&A/CapEx/NWC %, WACC CAPM inputs — but ticker search, accounts, exports, and AI analysis remain intentionally unbuilt per instructions).
 
 ## Current Setup
 
