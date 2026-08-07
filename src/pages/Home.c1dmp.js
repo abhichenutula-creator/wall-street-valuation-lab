@@ -1,6 +1,6 @@
 // API Reference: https://www.wix.com/velo/reference/api-overview/introduction
 import { runWaccCalculation, runScenarioValuation, runReverseDcf, runSensitivityTable } from 'backend/valuationApi.web';
-import { importCompanyData, debugSecretMetaCheck, debugFetchProfile, debugFetchIncome } from 'backend/companyImport.web';
+import { importCompanyData, debugFetchBalance, debugFetchCashflow } from 'backend/companyImport.web';
 
 // Bridges the embedded dashboard (public/dashboard.html, hosted on GitHub Pages
 // inside an HTML Component) to the verified Velo backend via postMessage/onMessage.
@@ -56,13 +56,28 @@ async function computeAll(payload) {
 }
 
 $w.onReady(function () {
-  // TEMPORARY debug calls — verifying the getApiKey() object-unwrap fix
-  // resolves the 401 (root cause: getSecretValue resolved to {value: "..."}
-  // instead of a plain string, per SECRET_META diagnostic). Remove once
-  // confirmed working end to end.
-  debugSecretMetaCheck().then((r) => console.log('[wsvl:debug] SECRET_META', JSON.stringify(r).slice(0, 500)));
-  debugFetchProfile('MSFT').then((r) => console.log('[wsvl:debug] PROFILE', JSON.stringify(r).slice(0, 500)));
-  debugFetchIncome('MSFT').then((r) => console.log('[wsvl:debug] INCOME', JSON.stringify(r).slice(0, 500)));
+  // TEMPORARY debug calls — verifying balance-sheet/cash-flow endpoints and
+  // the changeInWorkingCapital sign-flip assumption against real MSFT data.
+  // Plain-text logs (not JSON.stringify of a whole object) so the Developer
+  // Console prints them directly instead of a collapsed JSON tree. Remove
+  // once verification is complete.
+  debugFetchBalance('MSFT').then((r) => {
+    if (!r.ok) { console.log('[wsvl:debug] BALANCE ERROR ' + r.error); return; }
+    const b = r.data[0];
+    console.log('[wsvl:debug] BALANCE date=' + b.date + ' cash=' + b.cashAndCashEquivalents + ' totalDebt=' + b.totalDebt + ' shortTermDebt=' + b.shortTermDebt + ' longTermDebt=' + b.longTermDebt);
+  });
+  debugFetchCashflow('MSFT').then((r) => {
+    if (!r.ok) { console.log('[wsvl:debug] CASHFLOW ERROR ' + r.error); return; }
+    const c = r.data[0];
+    console.log('[wsvl:debug] CASHFLOW date=' + c.date + ' da=' + c.depreciationAndAmortization + ' capex=' + c.capitalExpenditure + ' changeInWorkingCapital=' + c.changeInWorkingCapital + ' netCashProvidedByOperatingActivities=' + c.netCashProvidedByOperatingActivities + ' freeCashFlow=' + c.freeCashFlow);
+  });
+  importCompanyData('MSFT').then((r) => {
+    console.log('[wsvl:debug] IMPORT company.name=' + (r.company && r.company.name) + ' price=' + (r.company && r.company.price) + ' beta=' + (r.company && r.company.beta));
+    console.log('[wsvl:debug] IMPORT shared.baseRevenue=' + (r.shared && r.shared.baseRevenue) + ' taxRate=' + (r.shared && r.shared.taxRate) + ' cash=' + (r.shared && r.shared.cash) + ' debt=' + (r.shared && r.shared.debt) + ' dilutedShares=' + (r.shared && r.shared.dilutedShares));
+    console.log('[wsvl:debug] IMPORT base.revenueGrowth=' + (r.base && r.base.revenueGrowth) + ' ebitMargin=' + (r.base && r.base.ebitMargin));
+    console.log('[wsvl:debug] IMPORT historicalLen=' + (r.historical ? r.historical.length : 0) + ' warningsCount=' + (r.warnings ? r.warnings.length : 0));
+    if (r.warnings && r.warnings.length) console.log('[wsvl:debug] IMPORT warnings=' + r.warnings.join(' | '));
+  }).catch((err) => console.log('[wsvl:debug] IMPORT ERROR ' + err.message));
 
   const dashboard = $w('#htmlDashboard');
 

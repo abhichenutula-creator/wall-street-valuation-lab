@@ -51,6 +51,24 @@ export const debugFetchIncome = webMethod(Permissions.Anyone, async (ticker) => 
   }
 });
 
+export const debugFetchBalance = webMethod(Permissions.Anyone, async (ticker) => {
+  try {
+    const data = await fetchBalanceSheets(ticker, 5);
+    return { ok: true, data };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+export const debugFetchCashflow = webMethod(Permissions.Anyone, async (ticker) => {
+  try {
+    const data = await fetchCashFlows(ticker, 5);
+    return { ok: true, data };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
 export const debugSecretMetaCheck = webMethod(Permissions.Anyone, async () => {
   return debugSecretMeta();
 });
