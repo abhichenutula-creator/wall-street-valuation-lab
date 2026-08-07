@@ -1,0 +1,9 @@
+body { font-family: system-ui, sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; color: #1a1a1a; }
+fieldset { margin-bottom: 1rem; }
+label { display: block; margin: 0.4rem 0; }
+input { margin-left: 0.5rem; width: 8rem; }
+button { margin-top: 1rem; padding: 0.5rem 1rem; }
+table { border-collapse: collapse; width: 100%; margin-bottom: 2rem; }
+th, td { border: 1px solid #ccc; padding: 0.4rem 0.6rem; text-align: right; }
+th:first-child, td:first-child { text-align: left; }
+#error { color: #b00020; margin: 1rem 0; }

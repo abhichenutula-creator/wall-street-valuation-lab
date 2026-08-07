@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Wall Street Valuation Lab — Phase 1</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <h1>Wall Street Valuation Lab — DCF Engine (MVP)</h1>
+
+  <form id="inputs-form">
+    <fieldset>
+      <legend>Company Financial Inputs</legend>
+      <label>Base Revenue ($M) <input type="number" step="any" name="baseRevenue" value="1000" required /></label>
+      <label>Diluted Shares Outstanding (M) <input type="number" step="any" name="dilutedShares" value="100" required /></label>
+      <label>Cash ($M) <input type="number" step="any" name="cash" value="200" required /></label>
+      <label>Debt ($M) <input type="number" step="any" name="debt" value="300" required /></label>
+      <label>Current Market Price ($) <input type="number" step="any" name="marketPrice" value="25" required /></label>
+    </fieldset>
+
+    <fieldset>
+      <legend>Base Case Assumptions (5-Year Forecast)</legend>
+      <label>Revenue Growth Rate <input type="number" step="any" name="revenueGrowth" value="0.10" required /></label>
+      <label>EBIT Margin <input type="number" step="any" name="ebitMargin" value="0.20" required /></label>
+      <label>Tax Rate <input type="number" step="any" name="taxRate" value="0.25" required /></label>
+      <label>D&amp;A (% of Revenue) <input type="number" step="any" name="daPctRevenue" value="0.05" required /></label>
+      <label>CapEx (% of Revenue) <input type="number" step="any" name="capexPctRevenue" value="0.06" required /></label>
+      <label>Change in NWC (% of Revenue) <input type="number" step="any" name="nwcChangePctRevenue" value="0.01" required /></label>
+      <label>Exit EBITDA Multiple <input type="number" step="any" name="exitMultiple" value="10" required /></label>
+    </fieldset>
+
+    <fieldset>
+      <legend>WACC Inputs</legend>
+      <label>Risk-Free Rate <input type="number" step="any" name="riskFreeRate" value="0.04" required /></label>
+      <label>Beta <input type="number" step="any" name="beta" value="1.10" required /></label>
+      <label>Equity Risk Premium <input type="number" step="any" name="equityRiskPremium" value="0.05" required /></label>
+      <label>Pre-Tax Cost of Debt <input type="number" step="any" name="preTaxCostOfDebt" value="0.06" required /></label>
+      <label>Terminal Growth Rate <input type="number" step="any" name="terminalGrowthRate" value="0.025" required /></label>
+    </fieldset>
+
+    <button type="submit">Run Valuation</button>
+  </form>
+
+  <section id="error" hidden></section>
+
+  <section id="results" hidden>
+    <h2>Valuation Summary</h2>
+    <table id="summary-table"></table>
+
+    <h2>Bear / Base / Bull Scenarios</h2>
+    <table id="scenario-table"></table>
+
+    <h2>Reverse DCF</h2>
+    <table id="reverse-dcf-table"></table>
+
+    <h2>Sensitivity: Implied Share Price (WACC x Terminal Growth)</h2>
+    <table id="sensitivity-table"></table>
+  </section>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
