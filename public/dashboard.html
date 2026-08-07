@@ -135,6 +135,25 @@
   .sens-table td.base-cell{background:rgba(45,212,191,.14);color:var(--accent);font-weight:600;border-radius:4px;box-shadow:inset 0 0 0 1px rgba(45,212,191,.35);}
   .sens-table td.na{color:var(--text-faint);}
 
+  /* Comps */
+  .peer-input-row{display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap;}
+  .peer-input{flex:1;min-width:240px;background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-family:var(--font-mono);font-size:12px;outline:none;}
+  .peer-input:focus{border-color:var(--accent-dim);}
+  .peer-check{accent-color:var(--accent);}
+  tr.peer-excluded td, tr.peer-excluded th{opacity:.4;text-decoration:line-through;}
+
+  /* Football field */
+  .ff-chart{position:relative;background:var(--panel);border:1px solid var(--border);border-radius:9px;padding:40px 16px 16px;}
+  .ff-row{display:flex;align-items:center;gap:10px;margin-bottom:12px;}
+  .ff-label{width:230px;flex:0 0 230px;font-size:11.5px;color:var(--text-dim);}
+  .ff-track{flex:1;position:relative;height:18px;background:var(--panel-raised);border-radius:4px;}
+  .ff-bar{position:absolute;top:3px;bottom:3px;background:rgba(45,212,191,.35);border:1px solid var(--accent-dim);border-radius:3px;}
+  .ff-mid{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--accent);}
+  .ff-na{position:absolute;left:8px;top:2px;font-size:10.5px;color:var(--text-faint);}
+  .ff-current-line{position:absolute;top:36px;bottom:16px;width:1px;background:var(--red);z-index:2;}
+  .ff-current-label{position:absolute;top:16px;font-size:10px;color:var(--red);transform:translateX(-50%);white-space:nowrap;}
+  .ff-disclaimer{font-size:10.5px;color:var(--text-faint);margin-top:10px;font-style:italic;}
+
   .footer-note{font-size:10.5px;color:var(--text-faint);text-align:center;padding:24px 0 8px;}
 
   ::-webkit-scrollbar{height:8px;width:8px;}
@@ -161,6 +180,9 @@
       <a href="#expectations"><span class="nav-dot"></span>Market Expectations</a>
       <a href="#scenarios"><span class="nav-dot"></span>Scenarios</a>
       <a href="#sensitivity"><span class="nav-dot"></span>Sensitivity</a>
+      <a href="#comps"><span class="nav-dot"></span>Trading Comps</a>
+      <a href="#historical-multiples"><span class="nav-dot"></span>Historical Multiples</a>
+      <a href="#footballfield"><span class="nav-dot"></span>Football Field</a>
       <a href="#summary"><span class="nav-dot"></span>Summary</a>
     </div>
   </nav>
@@ -274,9 +296,35 @@
       <div class="table-wrap"><table class="sens-table" id="sensitivityTable"></table></div>
     </section>
 
+    <section id="comps">
+      <div class="section-head"><div class="section-title">Trading Comps</div><div class="section-hint">Annual, most recent fiscal year &mdash; peer list is fully editable</div></div>
+      <div class="peer-input-row">
+        <input class="peer-input" id="peerInput" value="GOOGL, ORCL, AMZN, META, CRM" placeholder="Comma-separated tickers, e.g. GOOGL, ORCL, AMZN" />
+        <button class="restore-btn" id="updateCompsBtn" type="button">Update Comps</button>
+        <span class="badge badge-warn" id="compsStatusBadge" hidden></span>
+        <span class="section-hint" id="compsWarnings"></span>
+      </div>
+      <div class="table-wrap" id="compsTableWrap"></div>
+      <div class="section-head" style="margin-top:16px;"><div class="section-title" style="font-size:12.5px;">Implied Value from Comps</div><div class="section-hint">Peer P25 / Median / P75 multiple &times; target metric, bridged to implied share price</div></div>
+      <div class="table-wrap" id="compsImpliedWrap"></div>
+      <div class="section-head" style="margin-top:16px;"><div class="section-title" style="font-size:12.5px;">Exit Multiple Calibration</div><div class="section-hint">Informs, does not overwrite, your Exit Multiple DCF input</div></div>
+      <div class="table-wrap" style="padding:12px 16px;" id="calibrationWrap"></div>
+    </section>
+
+    <section id="historical-multiples">
+      <div class="section-head"><div class="section-title">Historical Multiples</div><div class="section-hint">Company vs. its own trading history &mdash; distinct from historical financial statements above</div></div>
+      <div class="table-wrap" id="historicalMultiplesWrap"></div>
+    </section>
+
+    <section id="footballfield">
+      <div class="section-head"><div class="section-title">Football Field</div><div class="section-hint">Not an investment recommendation &mdash; ranges show disagreement between valuation methods</div></div>
+      <div id="footballFieldWrap"></div>
+    </section>
+
     <section id="summary">
       <div class="section-head"><div class="section-title">Valuation Summary</div></div>
       <div class="card-grid" id="summaryCards"></div>
+      <div class="table-wrap" style="margin-top:12px;" id="valuationSummaryWrap"></div>
     </section>
 
     <div class="footer-note">Wall Street Valuation Lab &mdash; figures computed live by the verified Wix/Velo valuation engine. Not published. Not investment advice.</div>
@@ -297,7 +345,10 @@
     bull: { revenueGrowth: 0.18, ebitMargin: 0.26, waccDelta: -0.02, terminalGrowthRate: 0.035 },
     importedHistorical: null,
     suggestions: null,
-    editedFields: {}
+    editedFields: {},
+    lastResult: null,
+    compsRaw: null,
+    compsIncluded: {}
   };
 
   // Maps each of the 6 forecast-assumption input ids to its state path and to
@@ -364,6 +415,168 @@
 
   function requestCompanyImport(ticker){
     return sendWixRequest('wsvl:import-request', { ticker: ticker }, 15000);
+  }
+
+  function requestComps(ticker, peers){
+    return sendWixRequest('wsvl:comps-request', { ticker: ticker, peers: peers }, 20000);
+  }
+
+  // ---------- comps stats (small, generic; mirrors src/backend/comps/compsCalc.js
+  // so peer-exclusion checkboxes can recompute instantly client-side, without
+  // a network round trip, exactly the way the backend would) ----------
+  var COMPS_METRIC_DEFS = {
+    evToRevenue: { kind: 'ev', numerator: 'enterpriseValue', denominator: 'revenue', label: 'EV / Revenue' },
+    evToEbitda: { kind: 'ev', numerator: 'enterpriseValue', denominator: 'ebitda', label: 'EV / EBITDA' },
+    evToEbit: { kind: 'ev', numerator: 'enterpriseValue', denominator: 'ebit', label: 'EV / EBIT' },
+    peRatio: { kind: 'equity', numerator: 'marketCap', denominator: 'netIncome', label: 'P / E' },
+    priceToFcf: { kind: 'equity', numerator: 'marketCap', denominator: 'fcf', label: 'Price / FCF' }
+  };
+  function validNums(arr){ return arr.filter(function(v){ return typeof v === 'number' && isFinite(v); }); }
+  function csMean(arr){ var v = validNums(arr); return v.length ? v.reduce(function(a,b){ return a+b; },0)/v.length : null; }
+  function csMedian(arr){
+    var v = validNums(arr).sort(function(a,b){ return a-b; });
+    if (!v.length) return null;
+    var mid = Math.floor(v.length/2);
+    return v.length % 2 === 0 ? (v[mid-1]+v[mid])/2 : v[mid];
+  }
+  function csPercentile(arr, p){
+    var v = validNums(arr).sort(function(a,b){ return a-b; });
+    if (!v.length) return null;
+    if (v.length === 1) return v[0];
+    var idx = (p/100) * (v.length-1);
+    var lo = Math.floor(idx), hi = Math.ceil(idx);
+    if (lo === hi) return v[lo];
+    return v[lo] + (v[hi]-v[lo]) * (idx-lo);
+  }
+  function csImpliedPrice(metricKey, multiple, target){
+    var def = COMPS_METRIC_DEFS[metricKey];
+    if (multiple === null || multiple === undefined) return null;
+    var targetMetric = target[def.denominator];
+    if (targetMetric === null || targetMetric === undefined || targetMetric <= 0) return null;
+    if (!target.dilutedShares || target.dilutedShares <= 0) return null;
+    var equityValue;
+    if (def.kind === 'ev') {
+      if (target.cash === null || target.debt === null) return null;
+      equityValue = multiple * targetMetric + target.cash - target.debt;
+    } else {
+      equityValue = multiple * targetMetric;
+    }
+    return equityValue / target.dilutedShares;
+  }
+
+  // Recomputes cross-peer median/mean/p25/p75 and implied-value ranges from
+  // whichever peers are currently checked (state.compsIncluded), without a
+  // network round trip — the server already computed each peer's own
+  // multiples; only the aggregate stats change when a peer is excluded.
+  function recomputeComps(){
+    if (!state.compsRaw) return;
+    var target = state.compsRaw.compsTable.target;
+    var peers = state.compsRaw.compsTable.peers.map(function(p){
+      var included = state.compsIncluded[p.ticker] !== false;
+      return Object.assign({}, p, { included: included });
+    });
+    var stats = {};
+    Object.keys(COMPS_METRIC_DEFS).forEach(function(k){
+      var vals = peers.filter(function(p){ return p.included; }).map(function(p){ return p.multiples[k]; });
+      stats[k] = { median: csMedian(vals), mean: csMean(vals), p25: csPercentile(vals,25), p75: csPercentile(vals,75) };
+    });
+    var impliedRanges = {};
+    Object.keys(COMPS_METRIC_DEFS).forEach(function(k){
+      var s = stats[k];
+      impliedRanges[k] = { low: csImpliedPrice(k, s.p25, target), mid: csImpliedPrice(k, s.median, target), high: csImpliedPrice(k, s.p75, target) };
+    });
+    state.compsRaw.compsTable.peers = peers;
+    state.compsRaw.compsTable.stats = stats;
+    state.compsRaw.impliedRanges = impliedRanges;
+  }
+
+  function getCalibrationRange(comps){
+    if (!comps) return null;
+    var peerStat = comps.compsTable && comps.compsTable.stats && comps.compsTable.stats.evToEbitda;
+    if (peerStat && peerStat.p25 !== null && peerStat.p75 !== null) return { low: peerStat.p25, high: peerStat.p75 };
+    var hist = comps.historicalMultiples;
+    if (hist && hist.available && hist.metrics.evToEbitda.available) {
+      return { low: hist.metrics.evToEbitda.p25, high: hist.metrics.evToEbitda.p75 };
+    }
+    return null;
+  }
+
+  // Blends every available historical multiple into one combined implied
+  // range (min of each metric's low, mean of each metric's mid, max of each
+  // metric's high) — a deliberately simple combination, not a weighted model.
+  function buildHistoricalImpliedRange(comps){
+    if (!comps || !comps.historicalMultiples || !comps.historicalMultiples.available) return null;
+    var target = comps.compsTable.target;
+    var hm = comps.historicalMultiples.metrics;
+    var lows = [], mids = [], highs = [];
+    ['peRatio','evToRevenue','evToEbitda','priceToFcf'].forEach(function(k){
+      var m = hm[k];
+      if (!m || !m.available) return;
+      var low = csImpliedPrice(k, m.p25, target);
+      var mid = csImpliedPrice(k, m.median, target);
+      var high = csImpliedPrice(k, m.p75, target);
+      if (low !== null) lows.push(low);
+      if (mid !== null) mids.push(mid);
+      if (high !== null) highs.push(high);
+    });
+    if (!lows.length && !mids.length && !highs.length) return null;
+    return {
+      low: lows.length ? Math.min.apply(null, lows) : null,
+      mid: mids.length ? csMean(mids) : null,
+      high: highs.length ? Math.max.apply(null, highs) : null
+    };
+  }
+
+  // Assembles every valuation method into a common {label, low, mid, high}
+  // shape, shared by the football field and the valuation summary table so
+  // the two never disagree with each other. Each method is computed
+  // independently — none are adjusted to make them converge.
+  function buildValuationMethods(result, comps){
+    var methods = [];
+
+    if (result && result.sensitivity) {
+      var allVals = [];
+      result.sensitivity.table.forEach(function(rowVals){ rowVals.forEach(function(v){ if (v !== null) allVals.push(v); }); });
+      methods.push({ label: 'DCF — Gordon Growth (sensitivity)',
+        low: allVals.length ? Math.min.apply(null, allVals) : null,
+        mid: result.base.impliedSharePriceGordon,
+        high: allVals.length ? Math.max.apply(null, allVals) : null });
+    } else {
+      methods.push({ label: 'DCF — Gordon Growth (sensitivity)', low: null, mid: null, high: null });
+    }
+
+    if (result && result.base && result.base.dcf) {
+      var ebitdaTerminal = result.base.dcf.ebitda[result.base.dcf.ebitda.length - 1];
+      var calRange = getCalibrationRange(comps);
+      if (calRange && typeof ebitdaTerminal === 'number') {
+        var evLow = ebitdaTerminal * calRange.low, evHigh = ebitdaTerminal * calRange.high;
+        var priceLow = (evLow + state.shared.cash - state.shared.debt) / state.shared.dilutedShares;
+        var priceHigh = (evHigh + state.shared.cash - state.shared.debt) / state.shared.dilutedShares;
+        methods.push({ label: 'DCF — Exit Multiple (sensitivity)',
+          low: Math.min(priceLow, priceHigh), mid: result.base.impliedSharePriceExitMultiple, high: Math.max(priceLow, priceHigh) });
+      } else {
+        methods.push({ label: 'DCF — Exit Multiple (sensitivity)', low: null, mid: result.base.impliedSharePriceExitMultiple, high: null });
+      }
+    } else {
+      methods.push({ label: 'DCF — Exit Multiple (sensitivity)', low: null, mid: null, high: null });
+    }
+
+    if (result) {
+      methods.push({ label: 'Bear / Base / Bull', low: result.bear.impliedSharePriceGordon, mid: result.base.impliedSharePriceGordon, high: result.bull.impliedSharePriceGordon });
+    } else {
+      methods.push({ label: 'Bear / Base / Bull', low: null, mid: null, high: null });
+    }
+
+    var compsLabels = { evToRevenue: 'Trading Comps — EV/Revenue', evToEbitda: 'Trading Comps — EV/EBITDA', peRatio: 'Trading Comps — P/E' };
+    Object.keys(compsLabels).forEach(function(k){
+      var r = comps && comps.impliedRanges ? comps.impliedRanges[k] : null;
+      methods.push({ label: compsLabels[k], low: r ? r.low : null, mid: r ? r.mid : null, high: r ? r.high : null });
+    });
+
+    var hist = buildHistoricalImpliedRange(comps);
+    methods.push({ label: 'Historical Multiples', low: hist ? hist.low : null, mid: hist ? hist.mid : null, high: hist ? hist.high : null });
+
+    return methods;
   }
 
   // ---------- rendering ----------
@@ -646,6 +859,151 @@
     }).join('');
   }
 
+  function fmtMultiple(v){ return typeof v === 'number' ? v.toFixed(1)+'x' : '&mdash;'; }
+  function naOrMoney(v){ return typeof v === 'number' ? money(v) : 'N/A'; }
+
+  function renderComps(){
+    var tableWrap = document.getElementById('compsTableWrap');
+    var impliedWrap = document.getElementById('compsImpliedWrap');
+    if (!state.compsRaw) {
+      tableWrap.innerHTML = '<div style="padding:16px;color:var(--text-faint);font-size:12px;">Import a ticker to load trading comps.</div>';
+      impliedWrap.innerHTML = '';
+      return;
+    }
+    var t = state.compsRaw.compsTable.target;
+    var peers = state.compsRaw.compsTable.peers;
+    var metrics = ['evToRevenue','evToEbitda','evToEbit','peRatio','priceToFcf'];
+
+    var header = '<thead><tr><th></th><th>Company</th>' + metrics.map(function(m){ return '<th>'+COMPS_METRIC_DEFS[m].label+'</th>'; }).join('') + '</tr></thead>';
+    var targetRow = '<tr class="row-calc"><td></td><th>'+t.ticker+' (Target)</th>' + metrics.map(function(m){ return '<td>'+fmtMultiple(t.multiples[m])+'</td>'; }).join('') + '</tr>';
+    var peerRows = peers.map(function(p){
+      var checked = p.included ? 'checked' : '';
+      var mismatch = p.sectorMismatch ? ' <span class="tag tag-input" title="Sector differs from target — review before relying on this comp">Sector?</span>' : '';
+      return '<tr class="'+(p.included ? '' : 'peer-excluded')+'"><td><input type="checkbox" class="peer-check" data-ticker="'+p.ticker+'" '+checked+' /></td><th>'+p.ticker+mismatch+'</th>' +
+        metrics.map(function(m){ return '<td>'+fmtMultiple(p.multiples[m])+'</td>'; }).join('') + '</tr>';
+    }).join('');
+    var statLabels = { median: 'Peer Median', mean: 'Peer Mean', p25: 'Peer P25', p75: 'Peer P75' };
+    var statRows = Object.keys(statLabels).map(function(stat){
+      return '<tr class="row-hist"><td></td><th>'+statLabels[stat]+'</th>' +
+        metrics.map(function(m){ return '<td>'+fmtMultiple(state.compsRaw.compsTable.stats[m][stat])+'</td>'; }).join('') + '</tr>';
+    }).join('');
+    tableWrap.innerHTML = '<table>' + header + '<tbody>' + targetRow + peerRows + statRows + '</tbody></table>';
+
+    Array.prototype.forEach.call(tableWrap.querySelectorAll('.peer-check'), function(cb){
+      cb.addEventListener('change', function(){
+        state.compsIncluded[cb.getAttribute('data-ticker')] = cb.checked;
+        recomputeComps();
+        renderComps();
+        renderCalibration();
+        renderFootballField();
+        renderValuationSummary();
+      });
+    });
+
+    var ranges = state.compsRaw.impliedRanges;
+    var rangeRows = metrics.map(function(m){
+      var r = ranges[m];
+      return '<tr><th>'+COMPS_METRIC_DEFS[m].label+'</th><td>'+naOrMoney(r.low)+'</td><td>'+naOrMoney(r.mid)+'</td><td>'+naOrMoney(r.high)+'</td></tr>';
+    }).join('');
+    impliedWrap.innerHTML = '<table><thead><tr><th>Metric</th><th>Low (P25)</th><th>Mid (Median)</th><th>High (P75)</th></tr></thead><tbody>'+rangeRows+'</tbody></table>';
+
+    var warn = state.compsRaw.warnings || [];
+    var warnEl = document.getElementById('compsWarnings');
+    if (warnEl) {
+      warnEl.textContent = warn.length ? (warn.length + ' data note(s) — see console') : '';
+      if (warn.length) console.log('[wsvl] comps warnings', warn);
+    }
+  }
+
+  function renderHistoricalMultiplesTable(){
+    var wrap = document.getElementById('historicalMultiplesWrap');
+    if (!state.compsRaw || !state.compsRaw.historicalMultiples) {
+      wrap.innerHTML = '<div style="padding:16px;color:var(--text-faint);font-size:12px;">Import a ticker to load historical multiples.</div>';
+      return;
+    }
+    var hm = state.compsRaw.historicalMultiples;
+    if (!hm.available) {
+      wrap.innerHTML = '<div style="padding:16px;color:var(--text-faint);font-size:12px;">Historical multiples unavailable: ' + hm.reason + '</div>';
+      return;
+    }
+    var HIST_LABELS = { peRatio: 'P / E', evToRevenue: 'EV / Revenue', evToEbitda: 'EV / EBITDA', priceToFcf: 'Price / FCF' };
+    var rows = Object.keys(HIST_LABELS).map(function(k){
+      var m = hm.metrics[k];
+      if (!m.available) return '<tr><th>'+HIST_LABELS[k]+'</th><td colspan="5" style="color:var(--text-faint);text-align:left;">not available</td></tr>';
+      return '<tr><th>'+HIST_LABELS[k]+'</th><td class="row-calc">'+fmtMultiple(m.current)+'</td><td>'+fmtMultiple(m.median)+'</td><td>'+fmtMultiple(m.mean)+'</td>' +
+        '<td>'+fmtMultiple(m.p25)+' &ndash; '+fmtMultiple(m.p75)+'</td><td>'+fmtMultiple(m.range[0])+' &ndash; '+fmtMultiple(m.range[1])+'</td></tr>';
+    }).join('');
+    wrap.innerHTML = '<table><thead><tr><th>Metric</th><th>Current</th><th>5yr Median</th><th>5yr Mean</th><th>P25&ndash;P75</th><th>Range</th></tr></thead><tbody>'+rows+'</tbody></table>';
+  }
+
+  function renderCalibration(){
+    var wrap = document.getElementById('calibrationWrap');
+    if (!state.compsRaw) { wrap.innerHTML = '<div style="color:var(--text-faint);font-size:12px;">Import a ticker to see calibration data.</div>'; return; }
+    var userMultiple = state.shared.exitMultiple;
+    var peerMedian = state.compsRaw.compsTable.stats.evToEbitda.median;
+    var histMedian = (state.compsRaw.historicalMultiples.available && state.compsRaw.historicalMultiples.metrics.evToEbitda.available)
+      ? state.compsRaw.historicalMultiples.metrics.evToEbitda.median : null;
+    var calRange = getCalibrationRange(state.compsRaw);
+    wrap.innerHTML =
+      '<div class="scenario-row"><span>Your Exit Multiple (DCF input, unchanged by this panel)</span><span>'+fmtMultiple(userMultiple)+'</span></div>' +
+      '<div class="scenario-row"><span>Peer Median EV/EBITDA</span><span>'+fmtMultiple(peerMedian)+'</span></div>' +
+      '<div class="scenario-row"><span>Historical Median EV/EBITDA</span><span>'+fmtMultiple(histMedian)+'</span></div>' +
+      '<div class="scenario-row"><span>Suggested Range (P25&ndash;P75)</span><span>'+(calRange ? (fmtMultiple(calRange.low)+' &ndash; '+fmtMultiple(calRange.high)) : 'n/a')+'</span></div>';
+  }
+
+  function renderFootballField(){
+    var wrap = document.getElementById('footballFieldWrap');
+    var methods = buildValuationMethods(state.lastResult, state.compsRaw);
+    var currentPrice = state.company.price;
+    var allValues = typeof currentPrice === 'number' ? [currentPrice] : [];
+    methods.forEach(function(m){
+      if (m.low !== null) allValues.push(m.low);
+      if (m.high !== null) allValues.push(m.high);
+      if (m.mid !== null) allValues.push(m.mid);
+    });
+    if (allValues.length < 2) {
+      wrap.innerHTML = '<div style="padding:16px;color:var(--text-faint);font-size:12px;">Not enough data yet &mdash; import a ticker and load comps.</div>';
+      return;
+    }
+    var min = Math.min.apply(null, allValues) * 0.9;
+    var max = Math.max.apply(null, allValues) * 1.1;
+    function pctPos(v){ return ((v - min) / (max - min)) * 100; }
+    var rows = methods.map(function(m){
+      if (m.low === null && m.high === null && m.mid === null) {
+        return '<div class="ff-row"><div class="ff-label">'+m.label+'</div><div class="ff-track"><span class="ff-na">N/A</span></div></div>';
+      }
+      var low = m.low !== null ? m.low : m.mid;
+      var high = m.high !== null ? m.high : m.mid;
+      var mid = m.mid !== null ? m.mid : (low + high) / 2;
+      var leftPct = pctPos(low), widthPct = Math.max(pctPos(high) - pctPos(low), 0.5), midPct = pctPos(mid);
+      return '<div class="ff-row"><div class="ff-label">'+m.label+'</div><div class="ff-track">' +
+        '<div class="ff-bar" style="left:'+leftPct+'%;width:'+widthPct+'%;"></div>' +
+        '<div class="ff-mid" style="left:'+midPct+'%;"></div>' +
+        '</div></div>';
+    }).join('');
+    var currentLinePct = typeof currentPrice === 'number' ? pctPos(currentPrice) : null;
+    var currentMarkup = currentLinePct !== null
+      ? '<div class="ff-current-line" style="left:'+currentLinePct+'%;"></div><div class="ff-current-label" style="left:'+currentLinePct+'%;">Current $'+currentPrice.toFixed(2)+'</div>'
+      : '';
+    wrap.innerHTML = '<div class="ff-chart">' + currentMarkup + rows + '</div>' +
+      '<div class="ff-disclaimer">Ranges reflect differing valuation frameworks and their own assumptions, not a recommendation or price target.</div>';
+  }
+
+  function renderValuationSummary(){
+    var wrap = document.getElementById('valuationSummaryWrap');
+    var methods = buildValuationMethods(state.lastResult, state.compsRaw);
+    var currentPrice = state.company.price;
+    var rows = methods.map(function(m){
+      var premDisc = (m.mid !== null && typeof currentPrice === 'number') ? (currentPrice / m.mid - 1) : null;
+      return '<tr><th>'+m.label+'</th>' +
+        '<td>'+naOrMoney(m.low)+'</td><td>'+naOrMoney(m.mid)+'</td><td>'+naOrMoney(m.high)+'</td>' +
+        '<td>'+naOrMoney(currentPrice)+'</td>' +
+        '<td class="'+(premDisc !== null && premDisc > 0 ? 'row-calc' : '')+'">'+(premDisc !== null ? pct(premDisc) : 'N/A')+'</td>' +
+      '</tr>';
+    }).join('');
+    wrap.innerHTML = '<table><thead><tr><th>Method</th><th>Low</th><th>Mid</th><th>High</th><th>Current</th><th>Premium/(Discount) to Current</th></tr></thead><tbody>'+rows+'</tbody></table>';
+  }
+
   function renderAll(result){
     renderOverview(result);
     renderForecast(result);
@@ -655,6 +1013,8 @@
     renderScenarios(result);
     renderSensitivity(result);
     renderSummary(result);
+    renderFootballField();
+    renderValuationSummary();
   }
 
   // ---------- recompute ----------
@@ -687,6 +1047,7 @@
       engineReady = true;
       setText('engineStatusBadge', 'Engine: live');
       document.getElementById('engineStatusBadge').className = 'badge badge-live';
+      state.lastResult = result;
       renderAll(result);
     }).catch(function(err){
       setText('engineStatusBadge', 'Engine: error &mdash; ' + err.message);
@@ -743,6 +1104,36 @@
     });
   }
 
+  function applyCompsData(data){
+    state.compsRaw = data;
+    state.compsIncluded = {};
+    data.compsTable.peers.forEach(function(p){ state.compsIncluded[p.ticker] = p.included !== false; });
+    renderComps();
+    renderHistoricalMultiplesTable();
+    renderCalibration();
+    renderFootballField();
+    renderValuationSummary();
+  }
+
+  function fetchComps(){
+    var peersRaw = document.getElementById('peerInput').value;
+    var peers = peersRaw.split(',').map(function(s){ return s.trim().toUpperCase(); }).filter(Boolean);
+    var badge = document.getElementById('compsStatusBadge');
+    badge.hidden = false;
+    badge.textContent = 'Loading comps…';
+    requestComps(state.company.ticker, peers).then(function(data){
+      badge.hidden = true;
+      applyCompsData(data);
+    }).catch(function(err){
+      badge.hidden = false;
+      badge.textContent = 'Comps failed: ' + err.message;
+    });
+  }
+
+  function bindComps(){
+    document.getElementById('updateCompsBtn').addEventListener('click', fetchComps);
+  }
+
   function applyImportedData(data){
     var warningsEl = document.getElementById('importStatusBadge');
     var missing = [];
@@ -793,6 +1184,7 @@
     renderAssumptionBadges();
     renderHistorical();
     scheduleRecompute();
+    fetchComps();
   }
 
   function bindTickerSearch(){
@@ -832,6 +1224,9 @@
     bindNav();
     bindTickerSearch();
     bindRestoreSuggested();
+    bindComps();
+    renderFootballField();
+    renderValuationSummary();
     recompute();
   }
 
