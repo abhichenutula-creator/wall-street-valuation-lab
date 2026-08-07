@@ -1,5 +1,5 @@
 import { webMethod, Permissions } from '@wix/web-methods';
-import { fetchCompanyProfile, fetchIncomeStatements, fetchBalanceSheets, fetchCashFlows, debugSecretMeta } from './importing/fmpClient.js';
+import { fetchCompanyProfile, fetchIncomeStatements, fetchBalanceSheets, fetchCashFlows } from './importing/fmpClient.js';
 import { normalizeProfile, normalizeIncomeStatements, normalizeBalanceSheets, normalizeCashFlows, deriveEngineInputs } from './importing/normalizeFmp.js';
 
 // FMP account: PRIVATE DEVELOPMENT/TESTING ONLY (see Terms of Service —
@@ -29,46 +29,4 @@ export const importCompanyData = webMethod(Permissions.Anyone, async (rawTicker)
   const result = deriveEngineInputs({ profile, income, balance, cashflow });
 
   return { ticker, ...result };
-});
-
-// TEMPORARY debug exports for isolating the 401 — test one endpoint at a
-// time instead of the combined Promise.all above. Remove once resolved.
-export const debugFetchProfile = webMethod(Permissions.Anyone, async (ticker) => {
-  try {
-    const data = await fetchCompanyProfile(ticker);
-    return { ok: true, data };
-  } catch (err) {
-    return { ok: false, error: err.message };
-  }
-});
-
-export const debugFetchIncome = webMethod(Permissions.Anyone, async (ticker) => {
-  try {
-    const data = await fetchIncomeStatements(ticker, 5);
-    return { ok: true, data };
-  } catch (err) {
-    return { ok: false, error: err.message };
-  }
-});
-
-export const debugFetchBalance = webMethod(Permissions.Anyone, async (ticker) => {
-  try {
-    const data = await fetchBalanceSheets(ticker, 5);
-    return { ok: true, data };
-  } catch (err) {
-    return { ok: false, error: err.message };
-  }
-});
-
-export const debugFetchCashflow = webMethod(Permissions.Anyone, async (ticker) => {
-  try {
-    const data = await fetchCashFlows(ticker, 5);
-    return { ok: true, data };
-  } catch (err) {
-    return { ok: false, error: err.message };
-  }
-});
-
-export const debugSecretMetaCheck = webMethod(Permissions.Anyone, async () => {
-  return debugSecretMeta();
 });

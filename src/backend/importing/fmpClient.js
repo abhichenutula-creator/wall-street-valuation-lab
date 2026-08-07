@@ -27,41 +27,6 @@ async function getApiKey() {
   return value;
 }
 
-// TEMPORARY debug helper for the 401 investigation — reports only metadata
-// about the stored secret (length/whitespace/format shape), never the value
-// itself, so we can rule out vault-corruption (stray newline/space from a
-// paste) without ever exposing FMP_API_KEY. Remove once resolved.
-export async function debugSecretMeta() {
-  const raw = await elevatedGetSecretValue('FMP_API_KEY');
-  if (raw === null || raw === undefined) {
-    return { found: false };
-  }
-  const type = typeof raw;
-  if (type !== 'string') {
-    // Docs for wix-secrets-backend.v2 say this resolves to a plain string,
-    // but if the runtime is returning something else (an object/Promise
-    // wrapper), that would explain the 401: string-coercing a non-string
-    // into the apikey query param produces garbage like "[object Object]".
-    // Report only the shape (type/keys), never any value, to diagnose.
-    return {
-      found: true,
-      unexpectedType: type,
-      constructorName: raw && raw.constructor ? raw.constructor.name : null,
-      keys: type === 'object' ? Object.keys(raw) : null,
-    };
-  }
-  const trimmed = raw.trim();
-  return {
-    found: true,
-    length: raw.length,
-    trimmedLength: trimmed.length,
-    hasLeadingWhitespace: raw.length !== raw.trimStart().length,
-    hasTrailingWhitespace: raw.length !== raw.trimEnd().length,
-    hasInternalWhitespace: /\s/.test(trimmed),
-    matchesFmpKeyShape: /^[a-f0-9]{32}$/i.test(trimmed),
-  };
-}
-
 async function fetchFmp(path, params) {
   const apiKey = await getApiKey();
   const query = new URLSearchParams({ ...params, apikey: apiKey });
