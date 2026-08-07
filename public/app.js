@@ -36,11 +36,12 @@ form.addEventListener('submit', (event) => {
 
     const costOfEquity = calculateCostOfEquity(v.riskFreeRate, v.beta, v.equityRiskPremium);
     const afterTaxCostOfDebt = calculateAfterTaxCostOfDebt(v.preTaxCostOfDebt, v.taxRate);
-    const equityValueForWeights = v.dilutedShares * v.marketPrice;
+    // Uses an explicit market-value-of-equity input (not Current Market Price) so that
+    // changing "Current Market Price" only affects Reverse DCF, never intrinsic value.
     const wacc = calculateWACC({
       costOfEquity,
       afterTaxCostOfDebt,
-      equityValue: equityValueForWeights,
+      equityValue: v.marketValueOfEquity,
       debtValue: v.debt,
     });
 
@@ -108,6 +109,7 @@ form.addEventListener('submit', (event) => {
 
     const reverse = solveReverseDCF({
       ...sharedInputs,
+      ebitMargin: v.ebitMargin,
       wacc,
       terminalGrowthRate: v.terminalGrowthRate,
       targetPrice: v.marketPrice,
