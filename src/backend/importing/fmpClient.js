@@ -59,3 +59,7 @@ export async function fetchBalanceSheets(ticker, limit = 5) {
 export async function fetchCashFlows(ticker, limit = 5) {
   return fetchFmp('cash-flow-statement', { symbol: ticker, period: 'annual', limit: String(limit) });
 }
+
+export async function fetchKeyMetrics(ticker, limit = 5) {
+  return fetchFmp('key-metrics', { symbol: ticker, period: 'annual', limit: String(limit) });
+}

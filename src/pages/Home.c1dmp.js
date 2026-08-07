@@ -1,6 +1,6 @@
 // API Reference: https://www.wix.com/velo/reference/api-overview/introduction
 import { runWaccCalculation, runScenarioValuation, runReverseDcf, runSensitivityTable } from 'backend/valuationApi.web';
-import { importCompanyData } from 'backend/companyImport.web';
+import { importCompanyData, debugKeyMetrics } from 'backend/companyImport.web';
 
 // Bridges the embedded dashboard (public/dashboard.html, hosted on GitHub Pages
 // inside an HTML Component) to the verified Velo backend via postMessage/onMessage.
@@ -56,6 +56,14 @@ async function computeAll(payload) {
 }
 
 $w.onReady(function () {
+  // TEMPORARY (Phase 6 schema discovery). Remove after use.
+  debugKeyMetrics('MSFT').then((r) => {
+    if (!r.ok) { console.log('[wsvl:km] ERROR ' + r.error); return; }
+    console.log('[wsvl:km] count=' + r.data.length);
+    if (r.data[0]) console.log('[wsvl:km] keys=' + Object.keys(r.data[0]).join(','));
+    r.data.forEach((row) => console.log('[wsvl:km] ' + JSON.stringify(row)));
+  }).catch((err) => console.log('[wsvl:km] ERROR ' + err.message));
+
   const dashboard = $w('#htmlDashboard');
 
   dashboard.onMessage(async (event) => {
