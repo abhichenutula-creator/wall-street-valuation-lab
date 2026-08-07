@@ -57,6 +57,16 @@ async function computeAll(payload) {
 }
 
 $w.onReady(function () {
+  // TEMPORARY (META cross-ticker audit verification). Remove after use.
+  importCompanyData('META').then((r) => {
+    console.log('[wsvl:meta] company.name=' + r.company.name + ' ticker=' + r.company.ticker + ' price=' + r.company.price + ' beta=' + r.company.beta);
+    console.log('[wsvl:meta] shared.baseRevenue=' + r.shared.baseRevenue + ' taxRate=' + r.shared.taxRate + ' daPct=' + r.shared.daPctRevenue + ' capexPct=' + r.shared.capexPctRevenue + ' nwcPct=' + r.shared.nwcChangePctRevenue + ' cash=' + r.shared.cash + ' debt=' + r.shared.debt + ' shares=' + r.shared.dilutedShares);
+    console.log('[wsvl:meta] base.revenueGrowth=' + r.base.revenueGrowth + ' ebitMargin=' + r.base.ebitMargin);
+    console.log('[wsvl:meta] historicalLen=' + (r.historical ? r.historical.length : 0) + ' warningsCount=' + (r.warnings ? r.warnings.length : 0));
+    if (r.historical) r.historical.forEach((h) => console.log('[wsvl:meta] hist ' + h.fiscalYear + ' rev=' + h.revenue + ' ebit=' + h.ebit + ' ebitda=' + h.ebitda + ' da=' + h.depreciationAndAmortization + ' capex=' + h.capitalExpenditure));
+    if (r.warnings && r.warnings.length) console.log('[wsvl:meta] warnings=' + r.warnings.join(' | '));
+  }).catch((err) => console.log('[wsvl:meta] ERROR ' + err.message));
+
   const dashboard = $w('#htmlDashboard');
 
   dashboard.onMessage(async (event) => {
