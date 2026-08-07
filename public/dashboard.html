@@ -124,7 +124,9 @@
   .scenario-card.bear .scenario-name{color:var(--red);}
   .scenario-card.base .scenario-name{color:var(--accent);}
   .scenario-card.bull .scenario-name{color:var(--green);}
-  .scenario-price{font-family:var(--font-mono);font-size:26px;font-weight:500;margin:6px 0 14px;}
+  .scenario-price{font-family:var(--font-mono);font-size:26px;font-weight:500;margin:6px 0 4px;}
+  .scenario-price.neg{color:var(--red);}
+  .scenario-neg-flag{font-size:10px;color:var(--red);margin-bottom:10px;line-height:1.4;}
   .scenario-rows{display:flex;flex-direction:column;gap:7px;border-top:1px solid var(--border-soft);padding-top:10px;}
   .scenario-row{display:flex;justify-content:space-between;font-size:11.5px;}
   .scenario-row span:first-child{color:var(--text-faint);}
@@ -287,7 +289,8 @@
     </section>
 
     <section id="scenarios">
-      <div class="section-head"><div class="section-title">Bear / Base / Bull</div><div class="section-hint">Each scenario carries its own growth, margin, WACC and terminal growth</div></div>
+      <div class="section-head"><div class="section-title">Bear / Base / Bull</div><div class="section-hint">Bear/Bull are derived relative to Base &mdash; growth, margin, WACC and terminal growth</div></div>
+      <div class="badge badge-warn" id="scenarioOrderingWarning" hidden></div>
       <div class="scenario-grid" id="scenarioCards"></div>
     </section>
 
@@ -341,6 +344,8 @@
     shared: { baseRevenue: 1000, taxRate: 0.25, daPctRevenue: 0.05, capexPctRevenue: 0.06, nwcChangePctRevenue: 0.01, years: 5, exitMultiple: 10, cash: 200, debt: 300, dilutedShares: 100 },
     base: { revenueGrowth: 0.10, ebitMargin: 0.20, terminalGrowthRate: 0.025 },
     wacc: { riskFreeRate: 0.04, beta: 1.10, equityRiskPremium: 0.05, preTaxCostOfDebt: 0.06, marketValueOfEquity: 2500 },
+    // Bear/Bull are DERIVED from Base (see recomputeScenariosFromBase) —
+    // these starting values are placeholders overwritten before first render.
     bear: { revenueGrowth: 0.03, ebitMargin: 0.14, waccDelta: 0.02, terminalGrowthRate: 0.015 },
     bull: { revenueGrowth: 0.18, ebitMargin: 0.26, waccDelta: -0.02, terminalGrowthRate: 0.035 },
     importedHistorical: null,
@@ -363,6 +368,59 @@
     in_capexPctRevenue: { key: 'capexPctRevenue', group: 'shared' },
     in_nwcChangePctRevenue: { key: 'nwcChangePctRevenue', group: 'shared' }
   };
+
+  // ---------- scenario assumptions (mirrors src/backend/scenarios/scenarioAssumptions.js
+  // so Bear/Bull can be re-derived instantly client-side whenever Base
+  // changes, without a round trip). Bear/Bull are built RELATIVE to
+  // whatever Base currently is — never a fixed absolute percentage — so a
+  // company with an unusually high or low Base margin/growth still gets a
+  // correctly-ordered Bear < Base < Bull scenario set. ----------
+  function csClamp(v, lo, hi){ return Math.min(Math.max(v, lo), hi); }
+  var SCEN_GROWTH_SPREAD_RATIO = 0.5, SCEN_GROWTH_SPREAD_MIN = 0.02, SCEN_GROWTH_SPREAD_MAX = 0.08;
+  var SCEN_MARGIN_SPREAD_RATIO = 0.15, SCEN_MARGIN_SPREAD_MIN = 0.02, SCEN_MARGIN_SPREAD_MAX = 0.08;
+  var SCEN_MARGIN_FLOOR = 0.01, SCEN_MARGIN_CEILING = 0.95;
+  var SCEN_WACC_DELTA = 0.02, SCEN_TERMINAL_GROWTH_SPREAD = 0.01;
+
+  function csBuildScenarioAssumptions(base){
+    var g = base.revenueGrowth, m = base.ebitMargin, t = base.terminalGrowthRate;
+    var growthSpread = csClamp(Math.abs(g) * SCEN_GROWTH_SPREAD_RATIO, SCEN_GROWTH_SPREAD_MIN, SCEN_GROWTH_SPREAD_MAX);
+    var marginSpread = csClamp(Math.abs(m) * SCEN_MARGIN_SPREAD_RATIO, SCEN_MARGIN_SPREAD_MIN, SCEN_MARGIN_SPREAD_MAX);
+    return {
+      bear: {
+        revenueGrowth: g - growthSpread,
+        ebitMargin: csClamp(m - marginSpread, SCEN_MARGIN_FLOOR, SCEN_MARGIN_CEILING),
+        waccDelta: SCEN_WACC_DELTA,
+        terminalGrowthRate: Math.max(t - SCEN_TERMINAL_GROWTH_SPREAD, 0)
+      },
+      bull: {
+        revenueGrowth: g + growthSpread,
+        ebitMargin: csClamp(m + marginSpread, SCEN_MARGIN_FLOOR, SCEN_MARGIN_CEILING),
+        waccDelta: -SCEN_WACC_DELTA,
+        terminalGrowthRate: t + SCEN_TERMINAL_GROWTH_SPREAD
+      }
+    };
+  }
+
+  // Re-derives Bear/Bull from whatever Base currently is. Called whenever
+  // Base changes: on import, on "restore suggested defaults", and on every
+  // live edit to the Base Revenue Growth / EBIT Margin fields.
+  function recomputeScenariosFromBase(){
+    var built = csBuildScenarioAssumptions(state.base);
+    state.bear = Object.assign({}, state.bear, built.bear);
+    state.bull = Object.assign({}, state.bull, built.bull);
+  }
+
+  // Output-level consistency check — flags, never reorders or modifies,
+  // an internally inconsistent scenario result (e.g. Bull below Base).
+  function csCheckScenarioValueOrdering(bearPrice, basePrice, bullPrice){
+    if (typeof bearPrice !== 'number' || typeof basePrice !== 'number' || typeof bullPrice !== 'number') {
+      return { ok: null, issues: ['One or more scenario prices is not a number'] };
+    }
+    var issues = [];
+    if (!(bullPrice > basePrice)) issues.push('Bull implied price is not above Base');
+    if (!(basePrice > bearPrice)) issues.push('Base implied price is not above Bear');
+    return { ok: issues.length === 0, issues: issues };
+  }
 
   // ---------- formatting ----------
   function pct(x, d){ return typeof x === 'number' ? (x*100).toFixed(d===undefined?2:d)+'%' : '&mdash;'; }
@@ -811,9 +869,12 @@
     var html = defs.map(function(d){
       var r = result[d.key];
       var wacc = result.wacc.wacc + d.inputs.waccDelta;
+      var priceVal = r.impliedSharePriceGordon;
+      var isNeg = typeof priceVal === 'number' && priceVal < 0;
       return '<div class="scenario-card '+d.cls+'">' +
         '<div class="scenario-name">'+d.label+'</div>' +
-        '<div class="scenario-price">'+money(r.impliedSharePriceGordon)+'</div>' +
+        '<div class="scenario-price'+(isNeg?' neg':'')+'">'+money(priceVal)+'</div>' +
+        (isNeg ? '<div class="scenario-neg-flag">Negative implied value under these assumptions &mdash; shown as calculated, not floored</div>' : '') +
         '<div class="scenario-rows">' +
           '<div class="scenario-row"><span>Revenue Growth</span><span>'+pct(d.inputs.revenueGrowth)+'</span></div>' +
           '<div class="scenario-row"><span>EBIT Margin</span><span>'+pct(d.inputs.ebitMargin)+'</span></div>' +
@@ -823,6 +884,20 @@
       '</div>';
     }).join('');
     document.getElementById('scenarioCards').innerHTML = html;
+
+    // Output-level invariant: Bear < Base < Bull. Never reorders or
+    // modifies the computed values — only flags when they're inconsistent,
+    // so a genuinely broken assumption set is visible rather than hidden.
+    var ordering = csCheckScenarioValueOrdering(result.bear.impliedSharePriceGordon, result.base.impliedSharePriceGordon, result.bull.impliedSharePriceGordon);
+    var warnEl = document.getElementById('scenarioOrderingWarning');
+    if (warnEl) {
+      if (ordering.ok === false) {
+        warnEl.hidden = false;
+        warnEl.textContent = 'Scenario assumptions are internally inconsistent: ' + ordering.issues.join('; ');
+      } else {
+        warnEl.hidden = true;
+      }
+    }
   }
 
   function renderSensitivity(result){
@@ -1073,6 +1148,10 @@
             state.editedFields[SUGGESTION_FIELDS[id].key] = true;
             renderAssumptionBadges();
           }
+          // Bear/Bull are derived FROM Base — any edit to Base Revenue
+          // Growth or EBIT Margin re-derives them, so they never go stale
+          // relative to whatever Base currently is.
+          if (id === 'in_revenueGrowth' || id === 'in_ebitMargin') recomputeScenariosFromBase();
           if (path[0] === 'base' || path[1] === 'debt') renderHistorical();
           renderTickerStrip();
           scheduleRecompute();
@@ -1083,7 +1162,8 @@
 
   // Puts every suggested-starting-assumption field back to the value
   // imported with the current ticker, discarding any manual edits to those
-  // 6 fields (WACC inputs and Bear/Bull are untouched by this).
+  // 6 fields (WACC inputs are untouched by this; Bear/Bull are re-derived
+  // from the restored Base, since they always track Base).
   function bindRestoreSuggested(){
     var btn = document.getElementById('restoreSuggestedBtn');
     btn.addEventListener('click', function(){
@@ -1096,6 +1176,7 @@
         }
       });
       state.editedFields = {};
+      recomputeScenariosFromBase();
       fillInputs();
       renderAssumptionBadges();
       renderHistorical();
@@ -1168,6 +1249,7 @@
     state.importedHistorical = data.historical && data.historical.length ? data.historical : null;
     state.suggestions = data.suggestions || null;
     state.editedFields = {};
+    recomputeScenariosFromBase();
     document.getElementById('assumptionsToolbar').hidden = !state.suggestions;
 
     var allWarnings = (data.warnings || []).concat(missing.map(function(m){ return 'not applied: ' + m; }));
@@ -1216,6 +1298,7 @@
   }
 
   function init(){
+    recomputeScenariosFromBase();
     renderTickerStrip();
     fillInputs();
     renderAssumptionBadges();
