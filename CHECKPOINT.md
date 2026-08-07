@@ -2,6 +2,8 @@
 
 **Phase 1 (core valuation engine) is complete.** All 12 plan tasks implemented, 72/72 tests passing, UI verified in a real browser. See the final report in conversation history for the full bug list. This file is kept for historical reference; `docs/superpowers/plans/2026-08-07-phase1-core-valuation-engine.md` is the task-by-task record.
 
+**Phase 2 (Wix Velo port) is in progress, blocked on the user.** Backend engine ported unchanged to `wix-site/backend/` (verified byte-identical via `diff -r` against `src/engine/`), plus a `@wix/web-methods` wrapper (`wix-site/backend/valuationApi.web.js`), confirmed against Wix's SDK docs, not guessed. **Blocked**: user is connecting Git Integration/Dev Mode on the live Wix Studio site themselves (requires their own GitHub OAuth, which I can't do). Next step once they confirm it's connected: place `backend/` in the real repo, build the Valuation Lab page in the Editor (element placement — the least automatable part), then wire page code to the web methods and verify numerically against `test/engine/integration.test.js`'s Base Case. See `wix-site/README.md` for the detailed handoff.
+
 ## Current Setup
 
 - **Local dev machine**: Node.js v24.19.0 + npm 11.17.0 installed via `nvm` (no Homebrew available). Binaries symlinked into `~/.local/bin/{node,npm,npx}` (already on `PATH`), so `node`/`npm` work in any fresh shell without manually sourcing nvm.
