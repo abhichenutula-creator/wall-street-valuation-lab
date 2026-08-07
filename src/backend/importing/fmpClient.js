@@ -29,7 +29,11 @@ async function fetchFmp(path, params) {
   if (!response.ok) {
     // Never include the URL (contains the API key) in thrown error messages —
     // those can end up in logs or, worse, in a client-visible error payload.
-    throw new Error(`FMP request to "${path}" failed with status ${response.status}`);
+    // FMP's error response body (no key in it) names the exact cause (bad key
+    // vs. plan/endpoint restriction), so surface that text for diagnosis.
+    let bodyText = '';
+    try { bodyText = await response.text(); } catch (e) { /* ignore */ }
+    throw new Error(`FMP request to "${path}" failed with status ${response.status}: ${bodyText.slice(0, 300)}`);
   }
   return response.json();
 }

@@ -30,3 +30,23 @@ export const importCompanyData = webMethod(Permissions.Anyone, async (rawTicker)
 
   return { ticker, ...result };
 });
+
+// TEMPORARY debug exports for isolating the 401 — test one endpoint at a
+// time instead of the combined Promise.all above. Remove once resolved.
+export const debugFetchProfile = webMethod(Permissions.Anyone, async (ticker) => {
+  try {
+    const data = await fetchCompanyProfile(ticker);
+    return { ok: true, data };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+export const debugFetchIncome = webMethod(Permissions.Anyone, async (ticker) => {
+  try {
+    const data = await fetchIncomeStatements(ticker, 5);
+    return { ok: true, data };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
