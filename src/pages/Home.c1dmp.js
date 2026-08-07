@@ -57,18 +57,6 @@ async function computeAll(payload) {
 }
 
 $w.onReady(function () {
-  // TEMPORARY (Phase 6 end-to-end verification). Remove after use.
-  runMultiMethodValuation('MSFT', ['GOOGL', 'ORCL', 'AMZN', 'META', 'CRM']).then((r) => {
-    console.log('[wsvl:p6] target price=' + r.target.price + ' marketCap=' + r.target.marketCap + ' ev=' + r.target.enterpriseValue + ' revenue=' + r.target.revenue + ' ebitda=' + r.target.ebitda + ' ebit=' + r.target.ebit + ' netIncome=' + r.target.netIncome + ' fcf=' + r.target.fcf);
-    console.log('[wsvl:p6] targetMultiples=' + JSON.stringify(r.compsTable.target.multiples));
-    r.compsTable.peers.forEach((p) => console.log('[wsvl:p6] peer ' + p.ticker + ' sectorMismatch=' + p.sectorMismatch + ' multiples=' + JSON.stringify(p.multiples)));
-    console.log('[wsvl:p6] stats=' + JSON.stringify(r.compsTable.stats));
-    console.log('[wsvl:p6] impliedRanges=' + JSON.stringify(r.impliedRanges));
-    console.log('[wsvl:p6] historicalAvailable=' + r.historicalMultiples.available + ' reason=' + r.historicalMultiples.reason);
-    if (r.historicalMultiples.available) console.log('[wsvl:p6] historicalMetrics=' + JSON.stringify(r.historicalMultiples.metrics));
-    console.log('[wsvl:p6] warnings=' + JSON.stringify(r.warnings));
-  }).catch((err) => console.log('[wsvl:p6] ERROR ' + err.message));
-
   const dashboard = $w('#htmlDashboard');
 
   dashboard.onMessage(async (event) => {
