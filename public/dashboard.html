@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Wall Street Valuation Lab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --bg:#0B0E14; --panel:#12161F; --panel-raised:#171B26; --border:#232838; --border-soft:#1B2030;
+    --text:#E6E9F0; --text-dim:#8891A5; --text-faint:#5B6478;
+    --accent:#2DD4BF; --accent-dim:#1C7A70;
+    --amber:#F5A623; --green:#34D399; --red:#F87171;
+    --font-display:'Space Grotesk',sans-serif; --font-body:'Inter',sans-serif; --font-mono:'JetBrains Mono',monospace;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font-body);font-size:13px;line-height:1.5;}
+  ::selection{background:var(--accent-dim);color:#fff;}
+  a{color:inherit;}
+  .num{font-family:var(--font-mono);font-variant-numeric:tabular-nums;letter-spacing:-0.01em;}
+  .layout{display:flex;min-height:100vh;}
+
+  /* Sidebar */
+  .sidebar{width:196px;flex:0 0 196px;background:var(--panel);border-right:1px solid var(--border);padding:20px 0;position:sticky;top:0;height:100vh;overflow-y:auto;}
+  .brand{padding:0 20px 18px;border-bottom:1px solid var(--border-soft);margin-bottom:8px;}
+  .brand-mark{font-family:var(--font-display);font-weight:700;font-size:15px;letter-spacing:-0.01em;color:var(--text);}
+  .brand-sub{font-size:10px;color:var(--text-faint);text-transform:uppercase;letter-spacing:0.08em;margin-top:2px;}
+  .nav{display:flex;flex-direction:column;padding:8px 10px;gap:1px;}
+  .nav a{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:5px;font-size:12.5px;color:var(--text-dim);text-decoration:none;transition:background .12s,color .12s;}
+  .nav a:hover{background:var(--panel-raised);color:var(--text);}
+  .nav a.active{background:var(--panel-raised);color:var(--accent);}
+  .nav-dot{width:5px;height:5px;border-radius:50%;background:currentColor;opacity:.55;flex:0 0 5px;}
+
+  /* Main */
+  .main{flex:1;min-width:0;padding:22px 28px 80px;max-width:1180px;}
+
+  /* Ticker strip */
+  .ticker-strip{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px 18px;margin-bottom:22px;}
+  .ticker-search-row{display:flex;align-items:center;gap:10px;margin-bottom:14px;}
+  .ticker-input-wrap{position:relative;flex:1;max-width:340px;}
+  .ticker-input{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px 10px 8px 30px;color:var(--text);font-family:var(--font-mono);font-size:12.5px;outline:none;}
+  .ticker-input:focus{border-color:var(--accent-dim);}
+  .ticker-input-icon{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text-faint);font-size:12px;}
+  .badge{font-size:9.5px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;padding:3px 7px;border-radius:4px;white-space:nowrap;}
+  .badge-warn{background:rgba(245,166,35,.12);color:var(--amber);border:1px solid rgba(245,166,35,.28);}
+  .badge-live{background:rgba(45,212,191,.12);color:var(--accent);border:1px solid rgba(45,212,191,.28);}
+  .ticker-facts{display:grid;grid-template-columns:repeat(6,1fr);gap:0;border-top:1px solid var(--border-soft);padding-top:12px;}
+  .fact{padding:0 14px;border-left:1px solid var(--border-soft);}
+  .fact:first-child{border-left:none;padding-left:0;}
+  .fact-label{font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;}
+  .fact-value{font-family:var(--font-mono);font-size:14px;font-weight:500;color:var(--text);}
+  .fact-value.name{font-family:var(--font-display);font-size:13px;font-weight:600;}
+
+  /* Section */
+  section{margin-bottom:26px;scroll-margin-top:16px;}
+  .section-head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:10px;}
+  .section-title{font-family:var(--font-display);font-size:14px;font-weight:600;color:var(--text);}
+  .section-hint{font-size:11px;color:var(--text-faint);}
+
+  /* Card grid */
+  .card-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:9px;padding:13px 14px;}
+  .card-label{font-size:10px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;}
+  .card-value{font-family:var(--font-mono);font-size:19px;font-weight:500;}
+  .card-value.pos{color:var(--green);} .card-value.neg{color:var(--red);}
+  .card-sub{font-size:10.5px;color:var(--text-dim);margin-top:3px;}
+
+  /* Table */
+  .table-wrap{background:var(--panel);border:1px solid var(--border);border-radius:9px;overflow:hidden;overflow-x:auto;}
+  table{width:100%;border-collapse:collapse;font-size:12px;}
+  th,td{padding:8px 12px;text-align:right;white-space:nowrap;}
+  th:first-child,td:first-child{text-align:left;}
+  thead th{font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.05em;font-weight:500;border-bottom:1px solid var(--border);}
+  tbody td{font-family:var(--font-mono);border-bottom:1px solid var(--border-soft);color:var(--text);}
+  tbody th{border-bottom:1px solid var(--border-soft);font-weight:500;color:var(--text-dim);font-family:var(--font-body);}
+  tbody tr:last-child td, tbody tr:last-child th{border-bottom:none;}
+  .row-hist td, .row-hist th{color:var(--text-dim);}
+  .row-calc td{color:var(--accent);}
+  .tag{display:inline-block;font-size:8.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;padding:1px 5px;border-radius:3px;margin-left:6px;vertical-align:middle;}
+  .tag-hist{background:rgba(136,145,165,.15);color:var(--text-dim);}
+  .tag-fcst{background:rgba(45,212,191,.12);color:var(--accent);}
+  .tag-input{background:rgba(245,166,35,.12);color:var(--amber);}
+  .tag-calc{background:rgba(52,211,153,.12);color:var(--green);}
+  .legend{display:flex;gap:14px;padding:9px 12px;border-top:1px solid var(--border-soft);font-size:10.5px;color:var(--text-faint);}
+  .legend span{display:inline-flex;align-items:center;gap:5px;}
+
+  /* Assumption inputs */
+  .assumptions{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px;}
+  .field{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:10px 12px;}
+  .field label{display:block;font-size:10px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;}
+  .field input{width:100%;background:transparent;border:none;color:var(--accent);font-family:var(--font-mono);font-size:14px;font-weight:500;outline:none;padding:0;}
+  .field input:focus{color:#fff;}
+  .field .unit{color:var(--text-faint);font-size:11px;margin-left:2px;}
+
+  /* Reverse DCF signature panel */
+  .expectations-panel{background:linear-gradient(180deg,var(--panel) 0%, var(--panel) 100%);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:9px;padding:22px 26px;}
+  .expectations-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:26px;align-items:end;margin-bottom:18px;}
+  .expectations-figure .card-label{color:var(--text-faint);}
+  .expectations-figure .big{font-family:var(--font-mono);font-size:32px;font-weight:500;line-height:1;margin-top:6px;}
+  .expectations-figure .big.market{color:var(--text);}
+  .expectations-figure .big.base{color:var(--accent);}
+  .delta-bar{height:6px;border-radius:3px;background:var(--border-soft);position:relative;overflow:hidden;margin:4px 0 6px;}
+  .delta-bar-fill{position:absolute;top:0;bottom:0;background:var(--accent);border-radius:3px;}
+  .interpretation{font-size:12.5px;color:var(--text-dim);border-top:1px solid var(--border-soft);padding-top:14px;line-height:1.6;}
+  .interpretation strong{color:var(--text);font-weight:500;}
+  .disclaimer{font-size:10.5px;color:var(--text-faint);margin-top:8px;font-style:italic;}
+
+  /* Scenario cards */
+  .scenario-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
+  .scenario-card{background:var(--panel);border:1px solid var(--border);border-radius:9px;padding:16px;border-top:3px solid var(--border);}
+  .scenario-card.bear{border-top-color:var(--red);}
+  .scenario-card.base{border-top-color:var(--accent);}
+  .scenario-card.bull{border-top-color:var(--green);}
+  .scenario-name{font-family:var(--font-display);font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px;}
+  .scenario-card.bear .scenario-name{color:var(--red);}
+  .scenario-card.base .scenario-name{color:var(--accent);}
+  .scenario-card.bull .scenario-name{color:var(--green);}
+  .scenario-price{font-family:var(--font-mono);font-size:26px;font-weight:500;margin:6px 0 14px;}
+  .scenario-rows{display:flex;flex-direction:column;gap:7px;border-top:1px solid var(--border-soft);padding-top:10px;}
+  .scenario-row{display:flex;justify-content:space-between;font-size:11.5px;}
+  .scenario-row span:first-child{color:var(--text-faint);}
+  .scenario-row span:last-child{font-family:var(--font-mono);color:var(--text-dim);}
+
+  /* Sensitivity table */
+  .sens-table td, .sens-table th{text-align:center;padding:7px 10px;}
+  .sens-table td.base-cell{background:rgba(45,212,191,.14);color:var(--accent);font-weight:600;border-radius:4px;box-shadow:inset 0 0 0 1px rgba(45,212,191,.35);}
+  .sens-table td.na{color:var(--text-faint);}
+
+  .footer-note{font-size:10.5px;color:var(--text-faint);text-align:center;padding:24px 0 8px;}
+
+  ::-webkit-scrollbar{height:8px;width:8px;}
+  ::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px;}
+
+  @media (max-width:880px){
+    .sidebar{display:none;}
+    .ticker-facts,.expectations-grid,.scenario-grid{grid-template-columns:1fr 1fr;}
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+  <nav class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">Wall Street Valuation Lab</div>
+      <div class="brand-sub">DCF Terminal</div>
+    </div>
+    <div class="nav">
+      <a href="#overview" class="active"><span class="nav-dot"></span>Overview</a>
+      <a href="#company"><span class="nav-dot"></span>Company</a>
+      <a href="#forecast"><span class="nav-dot"></span>Forecast</a>
+      <a href="#dcf"><span class="nav-dot"></span>DCF</a>
+      <a href="#expectations"><span class="nav-dot"></span>Market Expectations</a>
+      <a href="#scenarios"><span class="nav-dot"></span>Scenarios</a>
+      <a href="#sensitivity"><span class="nav-dot"></span>Sensitivity</a>
+      <a href="#summary"><span class="nav-dot"></span>Summary</a>
+    </div>
+  </nav>
+
+  <main class="main">
+
+    <div class="ticker-strip">
+      <div class="ticker-search-row">
+        <div class="ticker-input-wrap">
+          <span class="ticker-input-icon">&#9906;</span>
+          <input class="ticker-input" placeholder="Search ticker (e.g. AAPL, MSFT)&hellip;" disabled />
+        </div>
+        <span class="badge badge-warn">Ticker search not yet connected</span>
+        <span class="badge badge-live" id="engineStatusBadge">Engine: connecting&hellip;</span>
+      </div>
+      <div class="ticker-facts">
+        <div class="fact"><div class="fact-label">Company</div><div class="fact-value name" id="factName">&mdash;</div></div>
+        <div class="fact"><div class="fact-label">Ticker</div><div class="fact-value" id="factTicker">&mdash;</div></div>
+        <div class="fact"><div class="fact-label">Current Price</div><div class="fact-value" id="factPrice">&mdash;</div></div>
+        <div class="fact"><div class="fact-label">Market Cap</div><div class="fact-value" id="factMcap">&mdash;</div></div>
+        <div class="fact"><div class="fact-label">Sector</div><div class="fact-value" id="factSector">&mdash;</div></div>
+        <div class="fact"><div class="fact-label">Industry</div><div class="fact-value" id="factIndustry">&mdash;</div></div>
+      </div>
+    </div>
+
+    <section id="overview">
+      <div class="section-head"><div class="section-title">Overview</div><div class="section-hint">Base case, live from the valuation engine</div></div>
+      <div class="card-grid" id="overviewCards"></div>
+    </section>
+
+    <section id="company">
+      <div class="section-head"><div class="section-title">Historical Financials</div><div class="section-hint">Sample base-case data &mdash; not yet sourced from a live filing</div></div>
+      <div class="table-wrap">
+        <table id="historicalTable"></table>
+        <div class="legend">
+          <span><span class="tag tag-hist">Hist</span>Historical (sample)</span>
+          <span><span class="tag tag-fcst">Fcst</span>Forecast</span>
+          <span><span class="tag tag-input">Input</span>User input</span>
+          <span><span class="tag tag-calc">Calc</span>Calculated output</span>
+        </div>
+      </div>
+    </section>
+
+    <section id="forecast">
+      <div class="section-head"><div class="section-title">5-Year Forecast</div><div class="section-hint">Edit assumptions to recalculate</div></div>
+      <div class="assumptions">
+        <div class="field"><label>Revenue Growth</label><input type="number" step="0.001" id="in_revenueGrowth" /></div>
+        <div class="field"><label>EBIT Margin</label><input type="number" step="0.001" id="in_ebitMargin" /></div>
+        <div class="field"><label>Tax Rate</label><input type="number" step="0.001" id="in_taxRate" /></div>
+        <div class="field"><label>D&amp;A % Revenue</label><input type="number" step="0.001" id="in_daPctRevenue" /></div>
+        <div class="field"><label>CapEx % Revenue</label><input type="number" step="0.001" id="in_capexPctRevenue" /></div>
+        <div class="field"><label>&Delta; NWC % Revenue</label><input type="number" step="0.001" id="in_nwcChangePctRevenue" /></div>
+      </div>
+      <div class="table-wrap"><table id="forecastTable"></table></div>
+    </section>
+
+    <section id="wacc">
+      <div class="section-head"><div class="section-title">WACC</div><div class="section-hint">Cost of capital, edit inputs</div></div>
+      <div class="assumptions">
+        <div class="field"><label>Risk-Free Rate</label><input type="number" step="0.001" id="in_riskFreeRate" /></div>
+        <div class="field"><label>Beta</label><input type="number" step="0.01" id="in_beta" /></div>
+        <div class="field"><label>Equity Risk Premium</label><input type="number" step="0.001" id="in_equityRiskPremium" /></div>
+        <div class="field"><label>Pre-Tax Cost of Debt</label><input type="number" step="0.001" id="in_preTaxCostOfDebt" /></div>
+        <div class="field"><label>Market Value of Equity</label><input type="number" step="1" id="in_marketValueOfEquity" /></div>
+        <div class="field"><label>Debt</label><input type="number" step="1" id="in_debt" /></div>
+      </div>
+      <div class="card-grid" id="waccCards"></div>
+    </section>
+
+    <section id="dcf">
+      <div class="section-head"><div class="section-title">DCF Valuation</div><div class="section-hint">Gordon Growth &amp; Exit Multiple</div></div>
+      <div class="table-wrap"><table id="dcfTable"></table></div>
+      <div class="card-grid" style="margin-top:10px;" id="dcfBridgeCards"></div>
+    </section>
+
+    <section id="expectations">
+      <div class="section-head"><div class="section-title">Market Expectations &mdash; Reverse DCF</div><div class="section-hint">What growth rate is the current price already pricing in?</div></div>
+      <div class="expectations-panel">
+        <div class="expectations-grid">
+          <div class="expectations-figure">
+            <div class="card-label">Current Market Price</div>
+            <div class="big market" id="revCurrentPrice">&mdash;</div>
+          </div>
+          <div class="expectations-figure">
+            <div class="card-label">Market-Implied Revenue CAGR</div>
+            <div class="big market" id="revImpliedCagr">&mdash;</div>
+          </div>
+          <div class="expectations-figure">
+            <div class="card-label">Your Base-Case Revenue CAGR</div>
+            <div class="big base" id="revBaseCagr">&mdash;</div>
+          </div>
+        </div>
+        <div class="delta-bar"><div class="delta-bar-fill" id="revDeltaBar"></div></div>
+        <div class="interpretation" id="revInterpretation">&mdash;</div>
+        <div class="disclaimer">This is a mechanical comparison of growth assumptions, not investment advice.</div>
+      </div>
+    </section>
+
+    <section id="scenarios">
+      <div class="section-head"><div class="section-title">Bear / Base / Bull</div><div class="section-hint">Each scenario carries its own growth, margin, WACC and terminal growth</div></div>
+      <div class="scenario-grid" id="scenarioCards"></div>
+    </section>
+
+    <section id="sensitivity">
+      <div class="section-head"><div class="section-title">Sensitivity &mdash; Implied Share Price</div><div class="section-hint">WACC (rows) &times; Terminal Growth (columns), base case highlighted</div></div>
+      <div class="table-wrap"><table class="sens-table" id="sensitivityTable"></table></div>
+    </section>
+
+    <section id="summary">
+      <div class="section-head"><div class="section-title">Valuation Summary</div></div>
+      <div class="card-grid" id="summaryCards"></div>
+    </section>
+
+    <div class="footer-note">Wall Street Valuation Lab &mdash; figures computed live by the verified Wix/Velo valuation engine. Not published. Not investment advice.</div>
+  </main>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  // ---------- state ----------
+  var state = {
+    company: { name: 'Acme Robotics, Inc.', ticker: 'ACME', price: 25.00, sector: 'Technology', industry: 'Industrial Automation & Robotics' },
+    shared: { baseRevenue: 1000, taxRate: 0.25, daPctRevenue: 0.05, capexPctRevenue: 0.06, nwcChangePctRevenue: 0.01, years: 5, exitMultiple: 10, cash: 200, debt: 300, dilutedShares: 100 },
+    base: { revenueGrowth: 0.10, ebitMargin: 0.20, terminalGrowthRate: 0.025 },
+    wacc: { riskFreeRate: 0.04, beta: 1.10, equityRiskPremium: 0.05, preTaxCostOfDebt: 0.06, marketValueOfEquity: 2500 },
+    bear: { revenueGrowth: 0.03, ebitMargin: 0.14, waccDelta: 0.02, terminalGrowthRate: 0.015 },
+    bull: { revenueGrowth: 0.18, ebitMargin: 0.26, waccDelta: -0.02, terminalGrowthRate: 0.035 }
+  };
+
+  // ---------- formatting ----------
+  function pct(x, d){ return typeof x === 'number' ? (x*100).toFixed(d===undefined?2:d)+'%' : '&mdash;'; }
+  function money(x, d){ return typeof x === 'number' ? '$'+x.toLocaleString('en-US',{minimumFractionDigits:d===undefined?2:d,maximumFractionDigits:d===undefined?2:d}) : '&mdash;'; }
+  function num(x, d){ return typeof x === 'number' ? x.toLocaleString('en-US',{minimumFractionDigits:d===undefined?1:d,maximumFractionDigits:d===undefined?1:d}) : '&mdash;'; }
+  function mcap(price, shares){ return '$'+(price*shares/1000).toFixed(2)+'B'; }
+
+  // ---------- bridge to Wix page code ----------
+  var pending = {};
+  var reqCounter = 0;
+  var engineReady = false;
+
+  window.addEventListener('message', function(event){
+    var msg = event.data;
+    if (!msg || msg.source !== 'wsvl') return;
+    if (msg.type === 'wsvl:response' && pending[msg.requestId]) {
+      pending[msg.requestId].resolve(msg.payload);
+      delete pending[msg.requestId];
+    } else if (msg.type === 'wsvl:error' && pending[msg.requestId]) {
+      pending[msg.requestId].reject(new Error(msg.message));
+      delete pending[msg.requestId];
+    }
+  });
+
+  function requestValuation(payload){
+    return new Promise(function(resolve, reject){
+      var requestId = 'r' + (++reqCounter);
+      pending[requestId] = { resolve: resolve, reject: reject };
+      var envelope = { source: 'wsvl', type: 'wsvl:request', requestId: requestId, payload: payload };
+      try {
+        window.parent.postMessage(envelope, '*');
+      } catch (e) { reject(e); }
+      setTimeout(function(){
+        if (pending[requestId]) { pending[requestId].reject(new Error('timeout')); delete pending[requestId]; }
+      }, 8000);
+    });
+  }
+
+  // ---------- rendering ----------
+  function setText(id, html){ var el = document.getElementById(id); if (el) el.innerHTML = html; }
+
+  function renderTickerStrip(){
+    setText('factName', state.company.name);
+    setText('factTicker', state.company.ticker);
+    setText('factPrice', money(state.company.price));
+    setText('factMcap', mcap(state.company.price, state.shared.dilutedShares));
+    setText('factSector', state.company.sector);
+    setText('factIndustry', state.company.industry);
+  }
+
+  function fillInputs(){
+    document.getElementById('in_revenueGrowth').value = state.base.revenueGrowth;
+    document.getElementById('in_ebitMargin').value = state.base.ebitMargin;
+    document.getElementById('in_taxRate').value = state.shared.taxRate;
+    document.getElementById('in_daPctRevenue').value = state.shared.daPctRevenue;
+    document.getElementById('in_capexPctRevenue').value = state.shared.capexPctRevenue;
+    document.getElementById('in_nwcChangePctRevenue').value = state.shared.nwcChangePctRevenue;
+    document.getElementById('in_riskFreeRate').value = state.wacc.riskFreeRate;
+    document.getElementById('in_beta').value = state.wacc.beta;
+    document.getElementById('in_equityRiskPremium').value = state.wacc.equityRiskPremium;
+    document.getElementById('in_preTaxCostOfDebt').value = state.wacc.preTaxCostOfDebt;
+    document.getElementById('in_marketValueOfEquity').value = state.wacc.marketValueOfEquity;
+    document.getElementById('in_debt').value = state.shared.debt;
+  }
+
+  function renderHistorical(){
+    var years = ['FY-4','FY-3','FY-2','FY-1','FY0 (Base)'];
+    var revenue = [680, 750, 825, 910, state.shared.baseRevenue];
+    var margin = state.base.ebitMargin;
+    var rows = [];
+    var header = '<thead><tr><th>Metric</th>' + years.map(function(y,i){ return '<th>'+y+(i<4?' <span class="tag tag-hist">Hist</span>':' <span class="tag tag-calc">Calc</span>')+'</th>'; }).join('') + '</tr></thead>';
+    var growth = revenue.map(function(r,i){ return i===0 ? null : (r/revenue[i-1]-1); });
+    var ebit = revenue.map(function(r){ return r*margin; });
+    var da = revenue.map(function(r){ return r*state.shared.daPctRevenue; });
+    var capex = revenue.map(function(r){ return r*state.shared.capexPctRevenue; });
+    var nwc = revenue.map(function(r){ return r*state.shared.nwcChangePctRevenue; });
+    var ebitda = ebit.map(function(e,i){ return e+da[i]; });
+    var nopat = ebit.map(function(e){ return e*(1-state.shared.taxRate); });
+    var fcf = nopat.map(function(n,i){ return n+da[i]-capex[i]-nwc[i]; });
+
+    function row(label, arr, fmt, cls){
+      return '<tr class="'+(cls||'')+'"><th>'+label+'</th>' + arr.map(function(v,i){ return '<td>'+ (v===null?'&mdash;':fmt(v)) +'</td>'; }).join('') + '</tr>';
+    }
+    var body = '<tbody>' +
+      row('Revenue', revenue, function(v){return money(v,0);}, 'row-hist') +
+      row('Revenue Growth', growth, function(v){return pct(v);}, 'row-hist') +
+      row('EBIT', ebit, function(v){return money(v,0);}, 'row-hist') +
+      row('EBIT Margin', ebit.map(function(){return margin;}), function(v){return pct(v);}, 'row-hist') +
+      row('EBITDA', ebitda, function(v){return money(v,0);}, 'row-hist') +
+      row('D&amp;A', da, function(v){return money(v,0);}, 'row-hist') +
+      row('CapEx', capex, function(v){return money(v,0);}, 'row-hist') +
+      row('Free Cash Flow', fcf, function(v){return money(v,0);}, 'row-calc') +
+    '</tbody>';
+    document.getElementById('historicalTable').innerHTML = header + body;
+  }
+
+  function renderOverview(result){
+    if (!result) return;
+    var b = result.base;
+    var cards = [
+      ['Enterprise Value (Gordon)', money(b.dcf.enterpriseValueGordon,1)],
+      ['Equity Value (Gordon)', money(b.equityValueGordon,1)],
+      ['Implied Share Price', money(b.impliedSharePriceGordon)],
+      ['WACC', pct(result.wacc.wacc)],
+      ['Current Price', money(state.company.price)],
+      ['Diluted Shares', num(state.shared.dilutedShares,0)+'M']
+    ];
+    document.getElementById('overviewCards').innerHTML = cards.map(function(c){
+      return '<div class="card"><div class="card-label">'+c[0]+'</div><div class="card-value">'+c[1]+'</div></div>';
+    }).join('');
+  }
+
+  function renderForecast(result){
+    if (!result) return;
+    var d = result.base.dcf;
+    var years = d.revenue.map(function(_,i){ return 'Y'+(i+1); });
+    function row(label, arr, fmt){
+      return '<tr><th>'+label+' <span class="tag tag-fcst">Fcst</span></th>' + arr.map(function(v){ return '<td>'+fmt(v)+'</td>'; }).join('') + '</tr>';
+    }
+    var header = '<thead><tr><th>Metric</th>' + years.map(function(y){return '<th>'+y+'</th>';}).join('') + '</tr></thead>';
+    var body = '<tbody>' +
+      row('Revenue', d.revenue, function(v){return money(v,0);}) +
+      row('EBIT', d.ebit, function(v){return money(v,0);}) +
+      row('NOPAT', d.nopat, function(v){return money(v,0);}) +
+      row('D&amp;A', d.da, function(v){return money(v,0);}) +
+      row('CapEx', d.capex, function(v){return money(v,0);}) +
+      row('&Delta; NWC', d.nwcChange, function(v){return money(v,0);}) +
+      row('Unlevered FCF', d.ufcf, function(v){return money(v,0);}) +
+    '</tbody>';
+    document.getElementById('forecastTable').innerHTML = header + body;
+  }
+
+  function renderWacc(result){
+    if (!result) return;
+    var w = result.wacc;
+    var totalCap = state.wacc.marketValueOfEquity + state.shared.debt;
+    var cards = [
+      ['Cost of Equity', pct(w.costOfEquity)],
+      ['After-Tax Cost of Debt', pct(w.afterTaxCostOfDebt)],
+      ['Equity Weight', pct(state.wacc.marketValueOfEquity/totalCap)],
+      ['Debt Weight', pct(state.shared.debt/totalCap)],
+      ['WACC', pct(w.wacc)]
+    ];
+    document.getElementById('waccCards').innerHTML = cards.map(function(c){
+      return '<div class="card"><div class="card-label">'+c[0]+'</div><div class="card-value">'+c[1]+'</div></div>';
+    }).join('');
+  }
+
+  function renderDcf(result){
+    if (!result) return;
+    var d = result.base.dcf;
+    var years = d.revenue.map(function(_,i){ return 'Y'+(i+1); });
+    var wacc = result.wacc.wacc;
+    var discFactors = d.revenue.map(function(_,i){ return 1/Math.pow(1+wacc, i+1); });
+    function row(label, arr, fmt){
+      return '<tr><th>'+label+'</th>' + arr.map(function(v){ return '<td>'+fmt(v)+'</td>'; }).join('') + '</tr>';
+    }
+    var header = '<thead><tr><th>Metric</th>' + years.map(function(y){return '<th>'+y+'</th>';}).join('') + '</tr></thead>';
+    var body = '<tbody>' +
+      row('Unlevered FCF', d.ufcf, function(v){return money(v,0);}) +
+      row('Discount Factor', discFactors, function(v){return v.toFixed(3);}) +
+      row('PV of UFCF', d.pvUFCF, function(v){return money(v,0);}) +
+    '</tbody>';
+    document.getElementById('dcfTable').innerHTML = header + body;
+
+    var eq = result.base.equityValueGordon;
+    var eqExit = result.base.equityValueExitMultiple;
+    var cards = [
+      ['Terminal Value (Gordon)', money(d.terminalValueGordon,0)],
+      ['PV of Terminal Value (Gordon)', money(d.pvTerminalValueGordon,0)],
+      ['Enterprise Value (Gordon)', money(d.enterpriseValueGordon,0)],
+      ['Terminal Value (Exit Mult.)', money(d.terminalValueExitMultiple,0)],
+      ['PV of Terminal Value (Exit Mult.)', money(d.pvTerminalValueExitMultiple,0)],
+      ['Enterprise Value (Exit Mult.)', money(d.enterpriseValueExitMultiple,0)],
+      ['Cash', money(state.shared.cash,0)],
+      ['Debt', money(state.shared.debt,0)],
+      ['Equity Value (Gordon)', money(eq,0)],
+      ['Equity Value (Exit Mult.)', money(eqExit,0)],
+      ['Implied Price (Gordon)', money(result.base.impliedSharePriceGordon)],
+      ['Implied Price (Exit Mult.)', money(result.base.impliedSharePriceExitMultiple)]
+    ];
+    document.getElementById('dcfBridgeCards').innerHTML = cards.map(function(c){
+      return '<div class="card"><div class="card-label">'+c[0]+'</div><div class="card-value">'+c[1]+'</div></div>';
+    }).join('');
+  }
+
+  function renderExpectations(result){
+    if (!result || !result.reverse) return;
+    var marketCagr = result.reverse.impliedGrowthRate;
+    var baseCagr = state.base.revenueGrowth;
+    setText('revCurrentPrice', money(state.company.price));
+    setText('revImpliedCagr', result.reverse.converged ? pct(marketCagr) : 'n/a');
+    setText('revBaseCagr', pct(baseCagr));
+
+    var lo = Math.min(marketCagr, baseCagr), hi = Math.max(marketCagr, baseCagr);
+    var span = Math.max(hi, 0.01);
+    var fillPct = Math.min(100, Math.max(0, (baseCagr/ (span*1.3)) * 100));
+    document.getElementById('revDeltaBar').style.width = fillPct + '%';
+
+    var diff = baseCagr - marketCagr;
+    var verb = diff < -0.001 ? 'slower' : (diff > 0.001 ? 'faster' : 'about the same');
+    var text = 'Your Base Case assumes <strong>' + verb + '</strong> revenue growth (' + pct(baseCagr) + ') than the growth implied by the current stock price (' + (result.reverse.converged ? pct(marketCagr) : 'n/a') + ').';
+    setText('revInterpretation', text);
+  }
+
+  function renderScenarios(result){
+    if (!result) return;
+    var defs = [
+      { key: 'bear', cls: 'bear', label: 'Bear', inputs: state.bear },
+      { key: 'base', cls: 'base', label: 'Base', inputs: { revenueGrowth: state.base.revenueGrowth, ebitMargin: state.base.ebitMargin, waccDelta: 0, terminalGrowthRate: state.base.terminalGrowthRate } },
+      { key: 'bull', cls: 'bull', label: 'Bull', inputs: state.bull }
+    ];
+    var html = defs.map(function(d){
+      var r = result[d.key];
+      var wacc = result.wacc.wacc + d.inputs.waccDelta;
+      return '<div class="scenario-card '+d.cls+'">' +
+        '<div class="scenario-name">'+d.label+'</div>' +
+        '<div class="scenario-price">'+money(r.impliedSharePriceGordon)+'</div>' +
+        '<div class="scenario-rows">' +
+          '<div class="scenario-row"><span>Revenue Growth</span><span>'+pct(d.inputs.revenueGrowth)+'</span></div>' +
+          '<div class="scenario-row"><span>EBIT Margin</span><span>'+pct(d.inputs.ebitMargin)+'</span></div>' +
+          '<div class="scenario-row"><span>WACC</span><span>'+pct(wacc)+'</span></div>' +
+          '<div class="scenario-row"><span>Terminal Growth</span><span>'+pct(d.inputs.terminalGrowthRate)+'</span></div>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+    document.getElementById('scenarioCards').innerHTML = html;
+  }
+
+  function renderSensitivity(result){
+    if (!result || !result.sensitivity) return;
+    var s = result.sensitivity;
+    var baseWacc = result.wacc.wacc, baseG = state.base.terminalGrowthRate;
+    var header = '<thead><tr><th>WACC \\ g</th>' + s.terminalGrowthValues.map(function(g){ return '<th>'+pct(g,1)+'</th>'; }).join('') + '</tr></thead>';
+    var body = '<tbody>' + s.waccValues.map(function(w,i){
+      var cells = s.table[i].map(function(v,j){
+        var g = s.terminalGrowthValues[j];
+        var isBase = Math.abs(w-baseWacc)<1e-6 && Math.abs(g-baseG)<1e-6;
+        if (v === null) return '<td class="na">n/a</td>';
+        return '<td class="'+(isBase?'base-cell':'')+'">'+money(v)+'</td>';
+      }).join('');
+      return '<tr><th>'+pct(w,1)+'</th>'+cells+'</tr>';
+    }).join('') + '</tbody>';
+    document.getElementById('sensitivityTable').innerHTML = header + body;
+  }
+
+  function renderSummary(result){
+    if (!result) return;
+    var cards = [
+      ['Current Price', money(state.company.price)],
+      ['DCF Implied Value (Gordon)', money(result.base.impliedSharePriceGordon)],
+      ['Bear Case', money(result.bear.impliedSharePriceGordon)],
+      ['Base Case', money(result.base.impliedSharePriceGordon)],
+      ['Bull Case', money(result.bull.impliedSharePriceGordon)],
+      ['Market-Implied Revenue Growth', result.reverse.converged ? pct(result.reverse.impliedGrowthRate) : 'n/a'],
+      ['WACC', pct(result.wacc.wacc)],
+      ['Terminal Growth', pct(state.base.terminalGrowthRate)]
+    ];
+    document.getElementById('summaryCards').innerHTML = cards.map(function(c){
+      return '<div class="card"><div class="card-label">'+c[0]+'</div><div class="card-value">'+c[1]+'</div></div>';
+    }).join('');
+  }
+
+  function renderAll(result){
+    renderOverview(result);
+    renderForecast(result);
+    renderWacc(result);
+    renderDcf(result);
+    renderExpectations(result);
+    renderScenarios(result);
+    renderSensitivity(result);
+    renderSummary(result);
+  }
+
+  // ---------- recompute ----------
+  var recomputeTimer = null;
+  function scheduleRecompute(){
+    clearTimeout(recomputeTimer);
+    recomputeTimer = setTimeout(recompute, 350);
+  }
+
+  function buildPayload(){
+    var waccInputs = {
+      riskFreeRate: state.wacc.riskFreeRate, beta: state.wacc.beta, equityRiskPremium: state.wacc.equityRiskPremium,
+      preTaxCostOfDebt: state.wacc.preTaxCostOfDebt, taxRate: state.shared.taxRate,
+      marketValueOfEquity: state.wacc.marketValueOfEquity, debt: state.shared.debt
+    };
+    var shared = state.shared;
+    return {
+      wacc: waccInputs,
+      shared: shared,
+      base: { revenueGrowth: state.base.revenueGrowth, ebitMargin: state.base.ebitMargin, terminalGrowthRate: state.base.terminalGrowthRate },
+      bear: state.bear,
+      bull: state.bull,
+      reverseTargetPrice: state.company.price,
+      sensitivityGSpan: [-0.01, -0.005, 0, 0.005, 0.01]
+    };
+  }
+
+  function recompute(){
+    requestValuation(buildPayload()).then(function(result){
+      engineReady = true;
+      setText('engineStatusBadge', 'Engine: live');
+      document.getElementById('engineStatusBadge').className = 'badge badge-live';
+      renderAll(result);
+    }).catch(function(err){
+      setText('engineStatusBadge', 'Engine: error &mdash; ' + err.message);
+    });
+  }
+
+  function bindInputs(){
+    var map = {
+      in_revenueGrowth: ['base','revenueGrowth'], in_ebitMargin: ['base','ebitMargin'],
+      in_taxRate: ['shared','taxRate'], in_daPctRevenue: ['shared','daPctRevenue'],
+      in_capexPctRevenue: ['shared','capexPctRevenue'], in_nwcChangePctRevenue: ['shared','nwcChangePctRevenue'],
+      in_riskFreeRate: ['wacc','riskFreeRate'], in_beta: ['wacc','beta'],
+      in_equityRiskPremium: ['wacc','equityRiskPremium'], in_preTaxCostOfDebt: ['wacc','preTaxCostOfDebt'],
+      in_marketValueOfEquity: ['wacc','marketValueOfEquity'], in_debt: ['shared','debt']
+    };
+    Object.keys(map).forEach(function(id){
+      document.getElementById(id).addEventListener('input', function(e){
+        var path = map[id];
+        var v = parseFloat(e.target.value);
+        if (!isNaN(v)) {
+          state[path[0]][path[1]] = v;
+          if (path[0] === 'base' || path[1] === 'debt') renderHistorical();
+          renderTickerStrip();
+          scheduleRecompute();
+        }
+      });
+    });
+  }
+
+  function bindNav(){
+    var links = document.querySelectorAll('.nav a');
+    links.forEach(function(link){
+      link.addEventListener('click', function(){
+        links.forEach(function(l){ l.classList.remove('active'); });
+        link.classList.add('active');
+      });
+    });
+  }
+
+  function init(){
+    renderTickerStrip();
+    fillInputs();
+    renderHistorical();
+    bindInputs();
+    bindNav();
+    recompute();
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+})();
+</script>
+</body>
+</html>
