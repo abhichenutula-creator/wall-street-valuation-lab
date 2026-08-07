@@ -56,17 +56,6 @@ async function computeAll(payload) {
 }
 
 $w.onReady(function () {
-  // TEMPORARY (Phase 5 implementation verification). Remove after use.
-  importCompanyData('MSFT').then((r) => {
-    console.log('[wsvl:v2] shared baseRevenue=' + r.shared.baseRevenue + ' taxRate=' + r.shared.taxRate + ' daPct=' + r.shared.daPctRevenue + ' capexPct=' + r.shared.capexPctRevenue + ' nwcPct=' + r.shared.nwcChangePctRevenue + ' cash=' + r.shared.cash + ' debt=' + r.shared.debt + ' shares=' + r.shared.dilutedShares);
-    console.log('[wsvl:v2] base revenueGrowth=' + r.base.revenueGrowth + ' ebitMargin=' + r.base.ebitMargin);
-    console.log('[wsvl:v2] company price=' + r.company.price + ' beta=' + r.company.beta);
-    Object.keys(r.suggestions).forEach((k) => {
-      const s = r.suggestions[k];
-      console.log('[wsvl:v2] suggestion.' + k + ' value=' + s.value + ' methodology="' + s.methodology + '" warning=' + (s.warning ? '"' + s.warning + '"' : 'none'));
-    });
-  }).catch((err) => console.log('[wsvl:v2] ERROR ' + err.message));
-
   const dashboard = $w('#htmlDashboard');
 
   dashboard.onMessage(async (event) => {
