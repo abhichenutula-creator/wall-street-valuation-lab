@@ -377,7 +377,19 @@
   "use strict";
 
   // ---------- state ----------
+  // activeTicker is the single canonical "which company is currently loaded"
+  // signal, set synchronously the instant a ticker load begins (before any
+  // network response). Every async response handler (import, recompute,
+  // comps) captures this value at request time and re-checks it when the
+  // response arrives; if a newer ticker has since been loaded, the response
+  // is discarded instead of applied. Without this, a slow-to-resolve
+  // request for an OLDER ticker can resolve after a NEWER ticker has
+  // already loaded and silently overwrite its DCF/forecast/scenario state
+  // with the old ticker's numbers — the company header (which reads
+  // state.company directly and synchronously) would show the new ticker
+  // while every result-derived section still shows the old one.
   var state = {
+    activeTicker: 'ACME',
     company: { name: 'Acme Robotics, Inc.', ticker: 'ACME', price: 25.00, sector: 'Technology', industry: 'Industrial Automation & Robotics' },
     shared: { baseRevenue: 1000, taxRate: 0.25, daPctRevenue: 0.05, capexPctRevenue: 0.06, nwcChangePctRevenue: 0.01, years: 5, exitMultiple: 10, cash: 200, debt: 300, dilutedShares: 100 },
     base: { revenueGrowth: 0.10, ebitMargin: 0.20, terminalGrowthRate: 0.025 },
@@ -1159,13 +1171,19 @@
   }
 
   function recompute(){
+    // Snapshot which ticker this request was built for. If a newer ticker
+    // becomes active before this resolves, the response is stale and must
+    // be discarded rather than applied — see the `state.activeTicker` note.
+    var requestTicker = state.activeTicker;
     requestValuation(buildPayload()).then(function(result){
+      if (state.activeTicker !== requestTicker) return;
       engineReady = true;
       setText('engineStatusBadge', 'Engine: live');
       document.getElementById('engineStatusBadge').className = 'badge badge-live';
       state.lastResult = result;
       renderAll(result);
     }).catch(function(err){
+      if (state.activeTicker !== requestTicker) return;
       setText('engineStatusBadge', 'Engine: error &mdash; ' + err.message);
     });
   }
@@ -1240,13 +1258,16 @@
   function fetchComps(){
     var peersRaw = document.getElementById('peerInput').value;
     var peers = peersRaw.split(',').map(function(s){ return s.trim().toUpperCase(); }).filter(Boolean);
+    var requestTicker = state.activeTicker;
     var badge = document.getElementById('compsStatusBadge');
     badge.hidden = false;
     badge.textContent = 'Loading comps…';
     requestComps(state.company.ticker, peers).then(function(data){
+      if (state.activeTicker !== requestTicker) return;
       badge.hidden = true;
       applyCompsData(data);
     }).catch(function(err){
+      if (state.activeTicker !== requestTicker) return;
       badge.hidden = false;
       badge.textContent = 'Comps failed: ' + err.message;
     });
@@ -1316,12 +1337,26 @@
       if (e.key !== 'Enter') return;
       var ticker = input.value.trim().toUpperCase();
       if (!ticker) return;
+      // Switch the canonical active ticker synchronously, before any network
+      // request — this both (a) lets recompute()/fetchComps() responses for
+      // the PREVIOUS ticker recognize themselves as stale and discard, and
+      // (b) immediately clears previous-ticker result/comps state so no
+      // stale DCF/comps numbers linger next to the new company's facts
+      // while the new data is loading.
+      state.activeTicker = ticker;
+      state.lastResult = null;
+      state.compsRaw = null;
+      state.compsIncluded = {};
+      renderFootballField();
+      renderValuationSummary();
       var badge = document.getElementById('importStatusBadge');
       badge.hidden = false;
       badge.textContent = 'Importing ' + ticker + '…';
       requestCompanyImport(ticker).then(function(data){
+        if (state.activeTicker !== ticker) return;
         applyImportedData(data);
       }).catch(function(err){
+        if (state.activeTicker !== ticker) return;
         badge.hidden = false;
         badge.textContent = 'Import failed: ' + err.message;
       });
