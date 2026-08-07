@@ -27,8 +27,22 @@ async function getApiKey() {
 // paste) without ever exposing FMP_API_KEY. Remove once resolved.
 export async function debugSecretMeta() {
   const raw = await elevatedGetSecretValue('FMP_API_KEY');
-  if (!raw) {
+  if (raw === null || raw === undefined) {
     return { found: false };
+  }
+  const type = typeof raw;
+  if (type !== 'string') {
+    // Docs for wix-secrets-backend.v2 say this resolves to a plain string,
+    // but if the runtime is returning something else (an object/Promise
+    // wrapper), that would explain the 401: string-coercing a non-string
+    // into the apikey query param produces garbage like "[object Object]".
+    // Report only the shape (type/keys), never any value, to diagnose.
+    return {
+      found: true,
+      unexpectedType: type,
+      constructorName: raw && raw.constructor ? raw.constructor.name : null,
+      keys: type === 'object' ? Object.keys(raw) : null,
+    };
   }
   const trimmed = raw.trim();
   return {
