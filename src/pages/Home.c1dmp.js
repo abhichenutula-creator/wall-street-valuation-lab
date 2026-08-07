@@ -1,6 +1,6 @@
 // API Reference: https://www.wix.com/velo/reference/api-overview/introduction
 import { runWaccCalculation, runScenarioValuation, runReverseDcf, runSensitivityTable } from 'backend/valuationApi.web';
-import { importCompanyData } from 'backend/companyImport.web';
+import { importCompanyData, debugForecastAudit } from 'backend/companyImport.web';
 
 // Bridges the embedded dashboard (public/dashboard.html, hosted on GitHub Pages
 // inside an HTML Component) to the verified Velo backend via postMessage/onMessage.
@@ -56,6 +56,20 @@ async function computeAll(payload) {
 }
 
 $w.onReady(function () {
+  // TEMPORARY (Phase 5 forecast-initialization audit). Remove after use.
+  debugForecastAudit('MSFT').then((r) => {
+    r.rows.forEach((row) => {
+      console.log('[wsvl:audit] ' + row.fiscalYear +
+        ' rev=' + Math.round(row.revenue / 1e6) +
+        'M revGrowth=' + (row.revenueGrowthYoY === null ? 'n/a' : (row.revenueGrowthYoY * 100).toFixed(2) + '%') +
+        ' ebitMargin=' + (row.ebitMargin === null ? 'n/a' : (row.ebitMargin * 100).toFixed(2) + '%') +
+        ' daPct=' + (row.daPctRevenue === null ? 'n/a' : (row.daPctRevenue * 100).toFixed(2) + '%') +
+        ' capexPct=' + (row.capexPctRevenue === null ? 'n/a' : (row.capexPctRevenue * 100).toFixed(2) + '%') +
+        ' nwcPct=' + (row.nwcChangePctRevenue === null ? 'n/a' : (row.nwcChangePctRevenue * 100).toFixed(2) + '%') +
+        ' taxRate=' + (row.effectiveTaxRate === null ? 'n/a' : (row.effectiveTaxRate * 100).toFixed(2) + '%'));
+    });
+  }).catch((err) => console.log('[wsvl:audit] ERROR ' + err.message));
+
   const dashboard = $w('#htmlDashboard');
 
   dashboard.onMessage(async (event) => {
