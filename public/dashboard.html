@@ -164,10 +164,11 @@
       <div class="ticker-search-row">
         <div class="ticker-input-wrap">
           <span class="ticker-input-icon">&#9906;</span>
-          <input class="ticker-input" placeholder="Search ticker (e.g. AAPL, MSFT)&hellip;" disabled />
+          <input class="ticker-input" id="tickerInput" placeholder="Enter ticker (e.g. MSFT) and press Enter&hellip;" />
         </div>
-        <span class="badge badge-warn">Ticker search not yet connected</span>
+        <span class="badge badge-warn">Private testing only &mdash; not public data display</span>
         <span class="badge badge-live" id="engineStatusBadge">Engine: connecting&hellip;</span>
+        <span class="badge badge-warn" id="importStatusBadge" hidden></span>
       </div>
       <div class="ticker-facts">
         <div class="fact"><div class="fact-label">Company</div><div class="fact-value name" id="factName">&mdash;</div></div>
@@ -282,7 +283,8 @@
     base: { revenueGrowth: 0.10, ebitMargin: 0.20, terminalGrowthRate: 0.025 },
     wacc: { riskFreeRate: 0.04, beta: 1.10, equityRiskPremium: 0.05, preTaxCostOfDebt: 0.06, marketValueOfEquity: 2500 },
     bear: { revenueGrowth: 0.03, ebitMargin: 0.14, waccDelta: 0.02, terminalGrowthRate: 0.015 },
-    bull: { revenueGrowth: 0.18, ebitMargin: 0.26, waccDelta: -0.02, terminalGrowthRate: 0.035 }
+    bull: { revenueGrowth: 0.18, ebitMargin: 0.26, waccDelta: -0.02, terminalGrowthRate: 0.035 },
+    importedHistorical: null
   };
 
   // ---------- formatting ----------
@@ -299,20 +301,24 @@
   window.addEventListener('message', function(event){
     var msg = event.data;
     if (!msg || msg.source !== 'wsvl') return;
-    if (msg.type === 'wsvl:response' && pending[msg.requestId]) {
-      pending[msg.requestId].resolve(msg.payload);
-      delete pending[msg.requestId];
-    } else if (msg.type === 'wsvl:error' && pending[msg.requestId]) {
+    if (!pending[msg.requestId]) return;
+    if (String(msg.type).endsWith('-error')) {
       pending[msg.requestId].reject(new Error(msg.message));
-      delete pending[msg.requestId];
+    } else {
+      pending[msg.requestId].resolve(msg.payload);
     }
+    delete pending[msg.requestId];
   });
 
-  function requestValuation(payload){
+  // Generic request/response bridge to Wix page code. Every FMP call happens
+  // server-side in Velo backend code — this file only ever sends a ticker
+  // string out and receives already-normalized numbers back. No FMP URL, no
+  // API key, and no direct network call to FMP exists anywhere in this file.
+  function sendWixRequest(type, payload, timeoutMs){
     return new Promise(function(resolve, reject){
       var requestId = 'r' + (++reqCounter);
       pending[requestId] = { resolve: resolve, reject: reject };
-      var envelope = { source: 'wsvl', type: 'wsvl:request', requestId: requestId, payload: payload };
+      var envelope = { source: 'wsvl', type: type, requestId: requestId, payload: payload };
       // Post to both parent and top: Wix's preview harness can add an extra
       // wrapping frame beyond the immediate parent, so window.parent alone
       // is not reliable in every rendering context (editor preview vs. published site).
@@ -322,8 +328,16 @@
       } catch (e) { reject(e); }
       setTimeout(function(){
         if (pending[requestId]) { pending[requestId].reject(new Error('timeout')); delete pending[requestId]; }
-      }, 8000);
+      }, timeoutMs || 8000);
     });
+  }
+
+  function requestValuation(payload){
+    return sendWixRequest('wsvl:request', payload, 8000);
+  }
+
+  function requestCompanyImport(ticker){
+    return sendWixRequest('wsvl:import-request', { ticker: ticker }, 15000);
   }
 
   // ---------- rendering ----------
@@ -353,11 +367,38 @@
     document.getElementById('in_debt').value = state.shared.debt;
   }
 
+  function row(label, arr, fmt, cls){
+    return '<tr class="'+(cls||'')+'"><th>'+label+'</th>' + arr.map(function(v){ return '<td>'+ (v===null || v===undefined ?'&mdash;':fmt(v)) +'</td>'; }).join('') + '</tr>';
+  }
+
   function renderHistorical(){
+    if (state.importedHistorical && state.importedHistorical.length) {
+      var h = state.importedHistorical;
+      var years2 = h.map(function(p, i){ return (p.fiscalYear ? p.fiscalYear.slice(0,4) : 'Y'+i) + (i===h.length-1 ? ' (Latest)' : ''); });
+      var header2 = '<thead><tr><th>Metric</th>' + years2.map(function(y){ return '<th>'+y+' <span class="tag tag-hist">Hist</span></th>'; }).join('') + '</tr></thead>';
+      var growth2 = h.map(function(p,i){ return i===0 ? null : (p.revenue/h[i-1].revenue - 1); });
+      var fcf2 = h.map(function(p){
+        if (p.ebit===null || p.depreciationAndAmortization===null || p.capitalExpenditure===null) return null;
+        var nopat = p.ebit * (1 - state.shared.taxRate);
+        return nopat + p.depreciationAndAmortization - p.capitalExpenditure; // NWC not available per-year from FMP; omitted here
+      });
+      var body2 = '<tbody>' +
+        row('Revenue', h.map(function(p){return p.revenue;}), function(v){return money(v,0);}, 'row-hist') +
+        row('Revenue Growth', growth2, function(v){return pct(v);}, 'row-hist') +
+        row('EBIT', h.map(function(p){return p.ebit;}), function(v){return money(v,0);}, 'row-hist') +
+        row('EBIT Margin', h.map(function(p){return p.ebitMargin;}), function(v){return pct(v);}, 'row-hist') +
+        row('EBITDA', h.map(function(p){return p.ebitda;}), function(v){return money(v,0);}, 'row-hist') +
+        row('D&amp;A', h.map(function(p){return p.depreciationAndAmortization;}), function(v){return money(v,0);}, 'row-hist') +
+        row('CapEx', h.map(function(p){return p.capitalExpenditure;}), function(v){return money(v,0);}, 'row-hist') +
+        row('Free Cash Flow (excl. &Delta;NWC)', fcf2, function(v){return money(v,0);}, 'row-calc') +
+      '</tbody>';
+      document.getElementById('historicalTable').innerHTML = header2 + body2;
+      return;
+    }
+
     var years = ['FY-4','FY-3','FY-2','FY-1','FY0 (Base)'];
     var revenue = [680, 750, 825, 910, state.shared.baseRevenue];
     var margin = state.base.ebitMargin;
-    var rows = [];
     var header = '<thead><tr><th>Metric</th>' + years.map(function(y,i){ return '<th>'+y+(i<4?' <span class="tag tag-hist">Hist</span>':' <span class="tag tag-calc">Calc</span>')+'</th>'; }).join('') + '</tr></thead>';
     var growth = revenue.map(function(r,i){ return i===0 ? null : (r/revenue[i-1]-1); });
     var ebit = revenue.map(function(r){ return r*margin; });
@@ -368,9 +409,6 @@
     var nopat = ebit.map(function(e){ return e*(1-state.shared.taxRate); });
     var fcf = nopat.map(function(n,i){ return n+da[i]-capex[i]-nwc[i]; });
 
-    function row(label, arr, fmt, cls){
-      return '<tr class="'+(cls||'')+'"><th>'+label+'</th>' + arr.map(function(v,i){ return '<td>'+ (v===null?'&mdash;':fmt(v)) +'</td>'; }).join('') + '</tr>';
-    }
     var body = '<tbody>' +
       row('Revenue', revenue, function(v){return money(v,0);}, 'row-hist') +
       row('Revenue Growth', growth, function(v){return pct(v);}, 'row-hist') +
@@ -621,6 +659,72 @@
     });
   }
 
+  function applyImportedData(data){
+    var warningsEl = document.getElementById('importStatusBadge');
+    var missing = [];
+    if (data.company) {
+      if (data.company.name !== null) state.company.name = data.company.name;
+      if (data.company.ticker !== null) state.company.ticker = data.company.ticker;
+      if (data.company.price !== null) state.company.price = data.company.price;
+      if (data.company.sector !== null) state.company.sector = data.company.sector;
+      if (data.company.industry !== null) state.company.industry = data.company.industry;
+      if (data.company.beta !== null) state.wacc.beta = data.company.beta;
+    } else {
+      missing.push('company profile');
+    }
+    if (data.shared) {
+      ['baseRevenue','taxRate','daPctRevenue','capexPctRevenue','nwcChangePctRevenue','cash','debt','dilutedShares'].forEach(function(k){
+        if (data.shared[k] !== null && data.shared[k] !== undefined) state.shared[k] = data.shared[k];
+        else missing.push('shared.' + k);
+      });
+      // Market value of equity for WACC: prefer live price * diluted shares.
+      if (state.company.price !== null && state.shared.dilutedShares) {
+        state.wacc.marketValueOfEquity = state.company.price * state.shared.dilutedShares;
+      }
+    } else {
+      missing.push('shared inputs (all)');
+    }
+    if (data.base) {
+      if (data.base.revenueGrowth !== null && data.base.revenueGrowth !== undefined) state.base.revenueGrowth = data.base.revenueGrowth;
+      else missing.push('base.revenueGrowth (historical CAGR)');
+      if (data.base.ebitMargin !== null && data.base.ebitMargin !== undefined) state.base.ebitMargin = data.base.ebitMargin;
+      else missing.push('base.ebitMargin');
+    }
+    state.importedHistorical = data.historical && data.historical.length ? data.historical : null;
+
+    var allWarnings = (data.warnings || []).concat(missing.map(function(m){ return 'not applied: ' + m; }));
+    if (allWarnings.length) {
+      warningsEl.hidden = false;
+      warningsEl.textContent = allWarnings.length + ' data warning(s) — see console';
+      console.log('[wsvl] import warnings for', data.ticker, allWarnings);
+    } else {
+      warningsEl.hidden = true;
+    }
+
+    renderTickerStrip();
+    fillInputs();
+    renderHistorical();
+    scheduleRecompute();
+  }
+
+  function bindTickerSearch(){
+    var input = document.getElementById('tickerInput');
+    input.addEventListener('keydown', function(e){
+      if (e.key !== 'Enter') return;
+      var ticker = input.value.trim().toUpperCase();
+      if (!ticker) return;
+      var badge = document.getElementById('importStatusBadge');
+      badge.hidden = false;
+      badge.textContent = 'Importing ' + ticker + '…';
+      requestCompanyImport(ticker).then(function(data){
+        applyImportedData(data);
+      }).catch(function(err){
+        badge.hidden = false;
+        badge.textContent = 'Import failed: ' + err.message;
+      });
+    });
+  }
+
   function bindNav(){
     var links = document.querySelectorAll('.nav a');
     links.forEach(function(link){
@@ -637,6 +741,7 @@
     renderHistorical();
     bindInputs();
     bindNav();
+    bindTickerSearch();
     recompute();
   }
 

@@ -1,5 +1,6 @@
 // API Reference: https://www.wix.com/velo/reference/api-overview/introduction
 import { runWaccCalculation, runScenarioValuation, runReverseDcf, runSensitivityTable } from 'backend/valuationApi.web';
+import { importCompanyData } from 'backend/companyImport.web';
 
 // Bridges the embedded dashboard (public/dashboard.html, hosted on GitHub Pages
 // inside an HTML Component) to the verified Velo backend via postMessage/onMessage.
@@ -59,13 +60,25 @@ $w.onReady(function () {
 
   dashboard.onMessage(async (event) => {
     const msg = event.data;
-    if (!msg || msg.source !== 'wsvl' || msg.type !== 'wsvl:request') return;
+    if (!msg || msg.source !== 'wsvl') return;
 
-    try {
-      const result = await computeAll(msg.payload);
-      dashboard.postMessage({ source: 'wsvl', type: 'wsvl:response', requestId: msg.requestId, payload: result });
-    } catch (err) {
-      dashboard.postMessage({ source: 'wsvl', type: 'wsvl:error', requestId: msg.requestId, message: err.message });
+    if (msg.type === 'wsvl:request') {
+      try {
+        const result = await computeAll(msg.payload);
+        dashboard.postMessage({ source: 'wsvl', type: 'wsvl:response', requestId: msg.requestId, payload: result });
+      } catch (err) {
+        dashboard.postMessage({ source: 'wsvl', type: 'wsvl:error', requestId: msg.requestId, message: err.message });
+      }
+      return;
+    }
+
+    if (msg.type === 'wsvl:import-request') {
+      try {
+        const result = await importCompanyData(msg.payload.ticker);
+        dashboard.postMessage({ source: 'wsvl', type: 'wsvl:import-response', requestId: msg.requestId, payload: result });
+      } catch (err) {
+        dashboard.postMessage({ source: 'wsvl', type: 'wsvl:import-error', requestId: msg.requestId, message: err.message });
+      }
     }
   });
 });
