@@ -56,6 +56,11 @@ async function computeAll(payload) {
 }
 
 $w.onReady(function () {
+  // TEMPORARY debug call for direct MSFT verification — remove after Phase 4 testing.
+  importCompanyData('MSFT')
+    .then((result) => console.log('[wsvl:debug] MSFT import result', JSON.stringify(result)))
+    .catch((err) => console.log('[wsvl:debug] MSFT import failed', err.message));
+
   const dashboard = $w('#htmlDashboard');
 
   dashboard.onMessage(async (event) => {
