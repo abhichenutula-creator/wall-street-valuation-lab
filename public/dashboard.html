@@ -93,6 +93,13 @@
   .field input{width:100%;background:transparent;border:none;color:var(--accent);font-family:var(--font-mono);font-size:14px;font-weight:500;outline:none;padding:0;}
   .field input:focus{color:#fff;}
   .field .unit{color:var(--text-faint);font-size:11px;margin-left:2px;}
+  .field-badge{font-size:8px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;padding:1px 5px;border-radius:3px;margin-left:2px;vertical-align:middle;}
+  .field-badge.suggested{background:rgba(245,166,35,.14);color:var(--amber);}
+  .field-badge.edited{background:rgba(136,145,165,.15);color:var(--text-dim);}
+  .assumptions-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;}
+  .assumptions-toolbar-hint{font-size:11px;color:var(--text-faint);}
+  .restore-btn{flex:0 0 auto;background:var(--panel);border:1px solid var(--border);border-radius:6px;color:var(--text-dim);font-size:11px;padding:5px 10px;cursor:pointer;font-family:var(--font-body);white-space:nowrap;}
+  .restore-btn:hover{color:var(--text);border-color:var(--accent-dim);}
 
   /* Reverse DCF signature panel */
   .expectations-panel{background:linear-gradient(180deg,var(--panel) 0%, var(--panel) 100%);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:9px;padding:22px 26px;}
@@ -200,13 +207,17 @@
 
     <section id="forecast">
       <div class="section-head"><div class="section-title">5-Year Forecast</div><div class="section-hint">Edit assumptions to recalculate</div></div>
+      <div class="assumptions-toolbar" id="assumptionsToolbar" hidden>
+        <span class="assumptions-toolbar-hint">Starting values below are suggested from imported history, not the latest year alone &mdash; hover a field for why.</span>
+        <button class="restore-btn" id="restoreSuggestedBtn" type="button">&#8634; Restore suggested defaults</button>
+      </div>
       <div class="assumptions">
-        <div class="field"><label>Revenue Growth</label><input type="number" step="0.001" id="in_revenueGrowth" /></div>
-        <div class="field"><label>EBIT Margin</label><input type="number" step="0.001" id="in_ebitMargin" /></div>
-        <div class="field"><label>Tax Rate</label><input type="number" step="0.001" id="in_taxRate" /></div>
-        <div class="field"><label>D&amp;A % Revenue</label><input type="number" step="0.001" id="in_daPctRevenue" /></div>
-        <div class="field"><label>CapEx % Revenue</label><input type="number" step="0.001" id="in_capexPctRevenue" /></div>
-        <div class="field"><label>&Delta; NWC % Revenue</label><input type="number" step="0.001" id="in_nwcChangePctRevenue" /></div>
+        <div class="field"><label>Revenue Growth <span class="field-badge" id="badge_revenueGrowth"></span></label><input type="number" step="0.001" id="in_revenueGrowth" /></div>
+        <div class="field"><label>EBIT Margin <span class="field-badge" id="badge_ebitMargin"></span></label><input type="number" step="0.001" id="in_ebitMargin" /></div>
+        <div class="field"><label>Tax Rate <span class="field-badge" id="badge_taxRate"></span></label><input type="number" step="0.001" id="in_taxRate" /></div>
+        <div class="field"><label>D&amp;A % Revenue <span class="field-badge" id="badge_daPctRevenue"></span></label><input type="number" step="0.001" id="in_daPctRevenue" /></div>
+        <div class="field"><label>CapEx % Revenue <span class="field-badge" id="badge_capexPctRevenue"></span></label><input type="number" step="0.001" id="in_capexPctRevenue" /></div>
+        <div class="field"><label>&Delta; NWC % Revenue <span class="field-badge" id="badge_nwcChangePctRevenue"></span></label><input type="number" step="0.001" id="in_nwcChangePctRevenue" /></div>
       </div>
       <div class="table-wrap"><table id="forecastTable"></table></div>
     </section>
@@ -284,7 +295,22 @@
     wacc: { riskFreeRate: 0.04, beta: 1.10, equityRiskPremium: 0.05, preTaxCostOfDebt: 0.06, marketValueOfEquity: 2500 },
     bear: { revenueGrowth: 0.03, ebitMargin: 0.14, waccDelta: 0.02, terminalGrowthRate: 0.015 },
     bull: { revenueGrowth: 0.18, ebitMargin: 0.26, waccDelta: -0.02, terminalGrowthRate: 0.035 },
-    importedHistorical: null
+    importedHistorical: null,
+    suggestions: null,
+    editedFields: {}
+  };
+
+  // Maps each of the 6 forecast-assumption input ids to its state path and to
+  // the matching key in the imported `suggestions` object (from
+  // deriveEngineInputs), so badges/restore can look up "Historical Reported"
+  // vs "Suggested Starting Assumption" vs "User Forecast" per field.
+  var SUGGESTION_FIELDS = {
+    in_revenueGrowth: { key: 'revenueGrowth', group: 'base' },
+    in_ebitMargin: { key: 'ebitMargin', group: 'base' },
+    in_taxRate: { key: 'taxRate', group: 'shared' },
+    in_daPctRevenue: { key: 'daPctRevenue', group: 'shared' },
+    in_capexPctRevenue: { key: 'capexPctRevenue', group: 'shared' },
+    in_nwcChangePctRevenue: { key: 'nwcChangePctRevenue', group: 'shared' }
   };
 
   // ---------- formatting ----------
@@ -365,6 +391,37 @@
     document.getElementById('in_preTaxCostOfDebt').value = state.wacc.preTaxCostOfDebt;
     document.getElementById('in_marketValueOfEquity').value = state.wacc.marketValueOfEquity;
     document.getElementById('in_debt').value = state.shared.debt;
+  }
+
+  // Labels each of the 6 forecast-assumption fields as "Suggested" (still
+  // equal to the imported starting assumption) or "User Forecast" (edited
+  // since import), and surfaces the suggestion's methodology/warning as a
+  // hover tooltip on the field. No badge at all until a real ticker has been
+  // imported (state.suggestions is null on the plain sample data).
+  function renderAssumptionBadges(){
+    Object.keys(SUGGESTION_FIELDS).forEach(function(inputId){
+      var f = SUGGESTION_FIELDS[inputId];
+      var badge = document.getElementById('badge_' + f.key);
+      if (!badge) return;
+      var field = badge.closest('.field');
+      if (!state.suggestions) {
+        badge.textContent = '';
+        badge.className = 'field-badge';
+        if (field) field.title = '';
+        return;
+      }
+      var s = state.suggestions[f.key];
+      if (state.editedFields[f.key]) {
+        badge.textContent = 'User Forecast';
+        badge.className = 'field-badge edited';
+      } else {
+        badge.textContent = 'Suggested';
+        badge.className = 'field-badge suggested';
+      }
+      if (field) {
+        field.title = s ? ('Suggested Starting Assumption — ' + s.methodology + (s.warning ? ('\n\n' + s.warning) : '')) : '';
+      }
+    });
   }
 
   function row(label, arr, fmt, cls){
@@ -651,11 +708,38 @@
         var v = parseFloat(e.target.value);
         if (!isNaN(v)) {
           state[path[0]][path[1]] = v;
+          if (SUGGESTION_FIELDS[id]) {
+            state.editedFields[SUGGESTION_FIELDS[id].key] = true;
+            renderAssumptionBadges();
+          }
           if (path[0] === 'base' || path[1] === 'debt') renderHistorical();
           renderTickerStrip();
           scheduleRecompute();
         }
       });
+    });
+  }
+
+  // Puts every suggested-starting-assumption field back to the value
+  // imported with the current ticker, discarding any manual edits to those
+  // 6 fields (WACC inputs and Bear/Bull are untouched by this).
+  function bindRestoreSuggested(){
+    var btn = document.getElementById('restoreSuggestedBtn');
+    btn.addEventListener('click', function(){
+      if (!state.suggestions) return;
+      Object.keys(SUGGESTION_FIELDS).forEach(function(inputId){
+        var f = SUGGESTION_FIELDS[inputId];
+        var s = state.suggestions[f.key];
+        if (s && s.value !== null && s.value !== undefined) {
+          state[f.group][f.key] = s.value;
+        }
+      });
+      state.editedFields = {};
+      fillInputs();
+      renderAssumptionBadges();
+      renderHistorical();
+      renderTickerStrip();
+      scheduleRecompute();
     });
   }
 
@@ -691,6 +775,9 @@
       else missing.push('base.ebitMargin');
     }
     state.importedHistorical = data.historical && data.historical.length ? data.historical : null;
+    state.suggestions = data.suggestions || null;
+    state.editedFields = {};
+    document.getElementById('assumptionsToolbar').hidden = !state.suggestions;
 
     var allWarnings = (data.warnings || []).concat(missing.map(function(m){ return 'not applied: ' + m; }));
     if (allWarnings.length) {
@@ -703,6 +790,7 @@
 
     renderTickerStrip();
     fillInputs();
+    renderAssumptionBadges();
     renderHistorical();
     scheduleRecompute();
   }
@@ -738,10 +826,12 @@
   function init(){
     renderTickerStrip();
     fillInputs();
+    renderAssumptionBadges();
     renderHistorical();
     bindInputs();
     bindNav();
     bindTickerSearch();
+    bindRestoreSuggested();
     recompute();
   }
 

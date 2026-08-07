@@ -10,6 +10,44 @@ function num(value) {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
+function average(values) {
+  const valid = values.filter((v) => typeof v === 'number' && Number.isFinite(v));
+  if (valid.length === 0) return null;
+  return valid.reduce((a, b) => a + b, 0) / valid.length;
+}
+
+function median(values) {
+  const valid = values.filter((v) => typeof v === 'number' && Number.isFinite(v)).sort((a, b) => a - b);
+  if (valid.length === 0) return null;
+  const mid = Math.floor(valid.length / 2);
+  return valid.length % 2 === 0 ? (valid[mid - 1] + valid[mid]) / 2 : valid[mid];
+}
+
+function recentAverage(values, windowSize) {
+  const valid = values.filter((v) => typeof v === 'number' && Number.isFinite(v));
+  if (valid.length === 0) return null;
+  return average(valid.slice(-windowSize));
+}
+
+// Flags when the most recent value is a sharp deviation from the trailing
+// window before it (e.g. a one-off capex surge), so a suggested starting
+// assumption never silently smuggles a spike in as "the new normal" without
+// the reason being visible. Purely a relative-deviation check — no
+// company-specific numbers — so it applies the same way to any ticker.
+function detectLatestYearDeviation(values, windowSize, thresholdRatio) {
+  const valid = values.filter((v) => typeof v === 'number' && Number.isFinite(v));
+  if (valid.length < 2) return null;
+  const latest = valid[valid.length - 1];
+  const priorWindow = valid.slice(0, -1).slice(-windowSize);
+  const priorAvg = average(priorWindow);
+  if (priorAvg === null || priorAvg <= 0) return null;
+  const ratio = latest / priorAvg;
+  if (ratio >= thresholdRatio || ratio <= 1 / thresholdRatio) {
+    return { latest, priorAvg, deviationPct: ratio - 1 };
+  }
+  return null;
+}
+
 export function normalizeProfile(rawProfileArray) {
   const raw = Array.isArray(rawProfileArray) ? rawProfileArray[0] : rawProfileArray;
   const warnings = [];
@@ -151,9 +189,73 @@ function toMillions(value) {
   return value === null ? null : value / 1e6;
 }
 
+const RECENT_WINDOW = 3;
+const DEVIATION_THRESHOLD_RATIO = 1.4; // flag a >40% relative jump/drop vs. the trailing window
+const FALLBACK_TAX_RATE = 0.21;
+
+// Phase 5 forecast-initialization methodology: a DCF's *starting* assumption
+// should not blindly extrapolate whatever the latest reported year happened
+// to be (a single elevated/depressed year, a one-off tax item, etc.) as the
+// permanent run rate. Each of these builders picks the aggregation that best
+// fits how that metric actually behaves historically across companies in
+// general — never a company-specific number — and always reports *why*, so
+// the suggestion is transparent and fully overridable.
+
+// EBIT margin / D&A / CapEx: operating ratios that drift gradually with the
+// business, but can carry a single unusual year (e.g. a capex supercycle).
+// A recent-window average captures the current regime without treating one
+// year as gospel, and a deviation check flags when that latest year is an
+// outlier so it isn't silently perpetuated across the whole forecast.
+function suggestRecentAverage(fiscalYears, values, label) {
+  const validCount = values.filter((v) => typeof v === 'number' && Number.isFinite(v)).length;
+  const value = recentAverage(values, RECENT_WINDOW);
+  if (value === null) {
+    return { value: null, methodology: `${RECENT_WINDOW}-year average`, sourceYears: [], warning: `${label}: no valid historical data to compute a suggested value` };
+  }
+  const usedCount = Math.min(RECENT_WINDOW, validCount);
+  const deviation = detectLatestYearDeviation(values, RECENT_WINDOW, DEVIATION_THRESHOLD_RATIO);
+  let warning = null;
+  if (deviation) {
+    const direction = deviation.deviationPct > 0 ? 'above' : 'below';
+    warning = `${label}: latest year (${(deviation.latest * 100).toFixed(1)}%) is ${Math.abs(deviation.deviationPct * 100).toFixed(0)}% ${direction} the trailing average (${(deviation.priorAvg * 100).toFixed(1)}%) — using a ${usedCount}-year blended average instead of perpetuating the latest year alone`;
+  }
+  return { value, methodology: `${usedCount}-year average`, sourceYears: fiscalYears.slice(-usedCount), warning };
+}
+
+// Change in NWC: historically noisy and rarely trending in either direction,
+// so a longer window (the full available history) is more representative
+// than a short recent average, which would still be dominated by noise.
+function suggestFullAverage(fiscalYears, values, label) {
+  const validCount = values.filter((v) => typeof v === 'number' && Number.isFinite(v)).length;
+  const value = average(values);
+  if (value === null) {
+    return { value: null, methodology: 'full-history average', sourceYears: [], warning: `${label}: no valid historical data to compute a suggested value` };
+  }
+  return { value, methodology: `${validCount}-year average`, sourceYears: fiscalYears.slice(-validCount), warning: null };
+}
+
+// Tax rate: prone to one-off, single-year distortions (credits, settlements,
+// discrete items) that a mean would be skewed by. The median is robust to
+// exactly one such outlier without needing to identify or exclude any
+// specific year.
+function suggestMedian(fiscalYears, values, label, fallbackValue) {
+  const validCount = values.filter((v) => typeof v === 'number' && Number.isFinite(v)).length;
+  const value = median(values);
+  if (value === null) {
+    return {
+      value: fallbackValue,
+      methodology: `fallback (${(fallbackValue * 100).toFixed(0)}%, no valid historical data)`,
+      sourceYears: [],
+      warning: `${label}: no valid historical data, falling back to ${(fallbackValue * 100).toFixed(0)}%`,
+    };
+  }
+  return { value, methodology: `median across ${validCount} years`, sourceYears: fiscalYears.slice(-validCount), warning: null };
+}
+
 // Combines the normalized statements into the exact shape the dashboard's
-// editable `state` object uses, plus a `historical` array for the table and
-// a `warnings` array surfacing every fallback/anomaly for review.
+// editable `state` object uses, plus a `historical` array for the table, a
+// `suggestions` object explaining how each starting assumption was derived
+// (for UI labeling), and a `warnings` array surfacing every fallback/anomaly.
 export function deriveEngineInputs({ profile, income, balance, cashflow }) {
   const warnings = [...profile.warnings, ...income.warnings, ...balance.warnings, ...cashflow.warnings];
 
@@ -164,54 +266,91 @@ export function deriveEngineInputs({ profile, income, balance, cashflow }) {
 
   if (!latestIncome || !latestBalance || !latestCashflow) {
     warnings.push('At least one statement type returned zero periods — cannot derive engine inputs');
-    return { company: null, shared: null, base: null, historical: [], warnings };
+    return { company: null, shared: null, base: null, historical: [], suggestions: null, warnings };
   }
 
+  // Per-period ratio series, aligned to income.periods by index — cashflow
+  // periods come from the same ticker/date range through the same
+  // oldest-first sort, so the index alignment already relied on below (in
+  // `historical`) holds here too.
+  const fiscalYears = income.periods.map((p) => p.fiscalYear);
+  const ebitMargins = income.periods.map((p) => (p.revenue && p.ebit !== null ? p.ebit / p.revenue : null));
+  const daPcts = income.periods.map((p, i) => {
+    const cf = cashflow.periods[i];
+    return p.revenue && cf && cf.depreciationAndAmortization !== null ? cf.depreciationAndAmortization / p.revenue : null;
+  });
+  const capexPcts = income.periods.map((p, i) => {
+    const cf = cashflow.periods[i];
+    return p.revenue && cf && cf.capitalExpenditure !== null ? cf.capitalExpenditure / p.revenue : null;
+  });
+  const nwcPcts = income.periods.map((p, i) => {
+    const cf = cashflow.periods[i];
+    return p.revenue && cf && cf.nwcIncrease !== null ? cf.nwcIncrease / p.revenue : null;
+  });
+  const taxRates = income.periods.map((p) => p.effectiveTaxRate);
+
+  // Revenue growth: CAGR across the full available historical window. This
+  // is already a normalized (non-latest-year-only) measure, so its
+  // methodology is unchanged — kept here for a consistent `suggestions` shape.
   const revenue0 = income.periods[0].revenue;
   const revenueN = latestIncome.revenue;
-  const revenueGrowth = n > 1 ? cagr(revenue0, revenueN, n - 1) : null;
-  if (revenueGrowth === null) warnings.push('Could not compute historical revenue CAGR (need 2+ periods with valid revenue)');
+  const revenueGrowthValue = n > 1 ? cagr(revenue0, revenueN, n - 1) : null;
+  const revenueGrowthSuggestion = {
+    value: revenueGrowthValue,
+    methodology: revenueGrowthValue === null ? 'unavailable' : `CAGR across ${n} years of history`,
+    sourceYears: revenueGrowthValue === null ? [] : fiscalYears,
+    warning: revenueGrowthValue === null ? 'Revenue growth: fewer than 2 valid historical periods with revenue, cannot compute a CAGR-based suggestion' : null,
+  };
 
-  const ebitMargin = latestIncome.revenue && latestIncome.ebit !== null ? latestIncome.ebit / latestIncome.revenue : null;
-  const daPctRevenue = latestIncome.revenue && latestCashflow.depreciationAndAmortization !== null
-    ? latestCashflow.depreciationAndAmortization / latestIncome.revenue : null;
-  const capexPctRevenue = latestIncome.revenue && latestCashflow.capitalExpenditure !== null
-    ? latestCashflow.capitalExpenditure / latestIncome.revenue : null;
-  const nwcChangePctRevenue = latestIncome.revenue && latestCashflow.nwcIncrease !== null
-    ? latestCashflow.nwcIncrease / latestIncome.revenue : null;
+  const ebitMarginSuggestion = suggestRecentAverage(fiscalYears, ebitMargins, 'EBIT margin');
+  const daPctSuggestion = suggestRecentAverage(fiscalYears, daPcts, 'D&A / Revenue');
+  const capexPctSuggestion = suggestRecentAverage(fiscalYears, capexPcts, 'CapEx / Revenue');
+  const nwcPctSuggestion = suggestFullAverage(fiscalYears, nwcPcts, 'Change in NWC / Revenue');
+  const taxRateSuggestion = suggestMedian(fiscalYears, taxRates, 'Tax rate', FALLBACK_TAX_RATE);
 
-  const FALLBACK_TAX_RATE = 0.21;
-  let taxRate = latestIncome.effectiveTaxRate;
-  if (taxRate === null) {
-    warnings.push(`No valid effective tax rate found, falling back to ${FALLBACK_TAX_RATE * 100}% (US statutory rate)`);
-    taxRate = FALLBACK_TAX_RATE;
-  }
+  [revenueGrowthSuggestion, ebitMarginSuggestion, daPctSuggestion, capexPctSuggestion, nwcPctSuggestion, taxRateSuggestion]
+    .forEach((s) => { if (s.warning) warnings.push(s.warning); });
 
-  const historical = income.periods.map((p, i) => ({
-    fiscalYear: p.fiscalYear,
-    revenue: toMillions(p.revenue),
-    ebit: toMillions(p.ebit),
-    ebitMargin: p.revenue && p.ebit !== null ? p.ebit / p.revenue : null,
-    ebitda: toMillions(p.ebitda),
-    depreciationAndAmortization: toMillions(cashflow.periods[i]?.depreciationAndAmortization ?? p.depreciationAndAmortization ?? null),
-    capitalExpenditure: toMillions(cashflow.periods[i]?.capitalExpenditure ?? null),
-  }));
+  const historical = income.periods.map((p, i) => {
+    const cf = cashflow.periods[i];
+    return {
+      fiscalYear: p.fiscalYear,
+      revenue: toMillions(p.revenue),
+      ebit: toMillions(p.ebit),
+      ebitMargin: ebitMargins[i],
+      ebitda: toMillions(p.ebitda),
+      depreciationAndAmortization: toMillions(cf?.depreciationAndAmortization ?? p.depreciationAndAmortization ?? null),
+      capitalExpenditure: toMillions(cf?.capitalExpenditure ?? null),
+      daPctRevenue: daPcts[i],
+      capexPctRevenue: capexPcts[i],
+      nwcChangePctRevenue: nwcPcts[i],
+      effectiveTaxRate: taxRates[i],
+    };
+  });
 
   return {
     company: profile.profile,
     shared: {
       baseRevenue: toMillions(revenueN),
-      taxRate,
-      daPctRevenue,
-      capexPctRevenue,
-      nwcChangePctRevenue,
+      taxRate: taxRateSuggestion.value,
+      daPctRevenue: daPctSuggestion.value,
+      capexPctRevenue: capexPctSuggestion.value,
+      nwcChangePctRevenue: nwcPctSuggestion.value,
       cash: toMillions(latestBalance.cash),
       debt: toMillions(latestBalance.debt),
       dilutedShares: toMillions(latestIncome.dilutedShares),
     },
     base: {
-      revenueGrowth,
-      ebitMargin,
+      revenueGrowth: revenueGrowthSuggestion.value,
+      ebitMargin: ebitMarginSuggestion.value,
+    },
+    suggestions: {
+      revenueGrowth: revenueGrowthSuggestion,
+      ebitMargin: ebitMarginSuggestion,
+      daPctRevenue: daPctSuggestion,
+      capexPctRevenue: capexPctSuggestion,
+      nwcChangePctRevenue: nwcPctSuggestion,
+      taxRate: taxRateSuggestion,
     },
     historical,
     warnings,
