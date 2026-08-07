@@ -55,20 +55,16 @@ async function computeAll(payload) {
 }
 
 $w.onReady(function () {
-  console.log('[wsvl] page ready, binding onMessage');
   const dashboard = $w('#htmlDashboard');
 
   dashboard.onMessage(async (event) => {
-    console.log('[wsvl] onMessage fired', JSON.stringify(event.data));
     const msg = event.data;
     if (!msg || msg.source !== 'wsvl' || msg.type !== 'wsvl:request') return;
 
     try {
       const result = await computeAll(msg.payload);
-      console.log('[wsvl] computeAll succeeded, posting response', msg.requestId);
       dashboard.postMessage({ source: 'wsvl', type: 'wsvl:response', requestId: msg.requestId, payload: result });
     } catch (err) {
-      console.log('[wsvl] computeAll threw', err.message);
       dashboard.postMessage({ source: 'wsvl', type: 'wsvl:error', requestId: msg.requestId, message: err.message });
     }
   });
