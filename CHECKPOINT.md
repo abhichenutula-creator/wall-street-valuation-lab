@@ -6,7 +6,11 @@
 
 Velo backend port relocated from the old `wix-site/backend/` scratch path to the real `src/backend/valuation/*.js` (byte-identical to `src/engine/*.js`) + `src/backend/valuationApi.web.js` (`@wix/web-methods` wrappers), matching Wix's actual Git-Integration layout.
 
-**Next**: confirm the Wix Editor's Local Editor/Dev Mode picked up the push, then build the actual Valuation Lab page (inputs, button, results tables) in the Editor and wire page code to `runWaccCalculation`/`runScenarioValuation`/`runReverseDcf`/`runSensitivityTable`, then browser-test against `test/engine/integration.test.js`'s Base Case.
+**Phase 2 native proof-of-concept: verified working, exact numerical match.** Added `#btnRunValuation` button + `#txtResults` text element to the Home page canvas (autosaved directly, independent of git). Wrote `src/pages/Home.c1dmp.js` calling `runWaccCalculation`/`runScenarioValuation`/`runReverseDcf`/`runSensitivityTable` against the same Base Case as `test/engine/integration.test.js`, pushed, confirmed Wix's Editor live-synced the code (no manual reload needed). Ran it in real Preview mode and compared every output number against the local engine's independently computed values — **exact match on all of them** (WACC 8.96%, EV Gordon 2829.94, EV Exit 3289.87, Equity Value 2729.94, implied prices $27.30/$31.90, Bear/Base/Bull $8.70/$27.30/$96.29, Reverse DCF 7.96% converged, full sensitivity row). This proves the ported `src/backend/valuation/*.js` running inside Wix's actual runtime produces identical output to the tested local engine.
+
+Scope note: this is a compact proof (1 button, 1 output block) rather than the full 18-field manual-input form — deliberate, to avoid dozens of fragile drag-and-drop element placements. Full manual-input parity with `public/index.html` is the next increment if wanted.
+
+**Next**: (optional) build out full manual-input fields on the native page to match `public/index.html`, or decide the HTML-embed route is sufficient for the manual-input UI while native Velo stays as the verified backend layer.
 
 ## Current Setup
 
